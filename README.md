@@ -1,5 +1,10 @@
 # fracture_network_deepgen
-Example of fracture networks deep generation using GraphRNN and DDPM
+Example of fracture networks deep generation using GraphRNN and DDPM.
+
+<br>
+<img src="./anim/06_00_anim_2d.gif" alt="ddpm">
+<br/>
+
 
 This repository is associated with forthcoming paper:
 
