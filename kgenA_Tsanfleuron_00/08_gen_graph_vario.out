@@ -1,0 +1,11 @@
+Job: 08_gen_graph_vario
+Running on: node03
+Python version:Python 3.11.14
+
+Traceback (most recent call last):
+  File "/cluster/raid/home/paulaa/karst_networks_gen-main/kgenA_Tsanfleuron_00/08_gen_graph_vario.py", line 21, in <module>
+    import karstnet as kn
+ModuleNotFoundError: No module named 'karstnet'
+/var/spool/slurm/slurmd/job647899/slurm_script: line 49: timediff: command not found
+
+Elapsed time in sec. : 

@@ -1,0 +1,161 @@
+Job: 04_graphDDPM_model_play
+Running on: node11
+Python version:Python 3.11.14
+
+<string>:1286: UserWarning: This figure includes Axes that are not compatible with tight_layout, so results might be incorrect.
+Load local functions...
+Load parameters...
+Define output settings...
+Define input settings...
+Load the data set / test set (graphDDPM)...
+Plot first graphs of the data set (2D)...
+Plot histogram of node features of the data set...
+Plot first graphs of the test set (2D)...
+Plot histogram of node features of the test set...
+Load the model (hyper parameters and parameters) (graphDDPM)...
+Display the model (graphDDPM)...
+Graph_DDPM(
+  (net): Graph_DDPM_net_model(
+    (te_down): ModuleList(
+      (0): Sequential(
+        (0): Linear(in_features=64, out_features=2, bias=True)
+        (1): LeakyReLU(negative_slope=0.01)
+        (2): Linear(in_features=2, out_features=2, bias=True)
+      )
+      (1): Sequential(
+        (0): Linear(in_features=64, out_features=128, bias=True)
+        (1): LeakyReLU(negative_slope=0.01)
+        (2): Linear(in_features=128, out_features=128, bias=True)
+      )
+      (2-3): 2 x Sequential(
+        (0): Linear(in_features=64, out_features=64, bias=True)
+        (1): LeakyReLU(negative_slope=0.01)
+        (2): Linear(in_features=64, out_features=64, bias=True)
+      )
+      (4-5): 2 x Sequential(
+        (0): Linear(in_features=64, out_features=32, bias=True)
+        (1): LeakyReLU(negative_slope=0.01)
+        (2): Linear(in_features=32, out_features=32, bias=True)
+      )
+      (6-7): 2 x Sequential(
+        (0): Linear(in_features=64, out_features=16, bias=True)
+        (1): LeakyReLU(negative_slope=0.01)
+        (2): Linear(in_features=16, out_features=16, bias=True)
+      )
+      (8): Sequential(
+        (0): Linear(in_features=64, out_features=8, bias=True)
+        (1): LeakyReLU(negative_slope=0.01)
+        (2): Linear(in_features=8, out_features=8, bias=True)
+      )
+    )
+    (laynorm_down): ModuleList(
+      (0): LayerNorm(2, affine=True, mode=graph)
+      (1): LayerNorm(128, affine=True, mode=graph)
+      (2-3): 2 x LayerNorm(64, affine=True, mode=graph)
+      (4-5): 2 x LayerNorm(32, affine=True, mode=graph)
+      (6-7): 2 x LayerNorm(16, affine=True, mode=graph)
+      (8): LayerNorm(8, affine=True, mode=graph)
+    )
+    (layop_down1): ModuleList(
+      (0): SAGEConv(2, 128, aggr=mean)
+      (1): SAGEConv(128, 64, aggr=mean)
+      (2): SAGEConv(64, 64, aggr=mean)
+      (3): SAGEConv(64, 32, aggr=mean)
+      (4): SAGEConv(32, 32, aggr=mean)
+      (5): SAGEConv(32, 16, aggr=mean)
+      (6): SAGEConv(16, 16, aggr=mean)
+      (7): SAGEConv(16, 8, aggr=mean)
+      (8): SAGEConv(8, 8, aggr=mean)
+    )
+    (layop_down2): ModuleList(
+      (0): SAGEConv(128, 128, aggr=mean)
+      (1-2): 2 x SAGEConv(64, 64, aggr=mean)
+      (3-4): 2 x SAGEConv(32, 32, aggr=mean)
+      (5-6): 2 x SAGEConv(16, 16, aggr=mean)
+      (7-8): 2 x SAGEConv(8, 8, aggr=mean)
+    )
+    (te_mid): Sequential(
+      (0): Linear(in_features=64, out_features=8, bias=True)
+      (1): LeakyReLU(negative_slope=0.01)
+      (2): Linear(in_features=8, out_features=8, bias=True)
+    )
+    (laynorm_mid): LayerNorm(8, affine=True, mode=graph)
+    (layop_mid1): SAGEConv(8, 8, aggr=mean)
+    (layop_mid2): SAGEConv(8, 8, aggr=mean)
+    (te_up): ModuleList(
+      (0): Sequential(
+        (0): Linear(in_features=64, out_features=8, bias=True)
+        (1): LeakyReLU(negative_slope=0.01)
+        (2): Linear(in_features=8, out_features=8, bias=True)
+      )
+      (1): Sequential(
+        (0): Linear(in_features=64, out_features=16, bias=True)
+        (1): LeakyReLU(negative_slope=0.01)
+        (2): Linear(in_features=16, out_features=16, bias=True)
+      )
+      (2-3): 2 x Sequential(
+        (0): Linear(in_features=64, out_features=32, bias=True)
+        (1): LeakyReLU(negative_slope=0.01)
+        (2): Linear(in_features=32, out_features=32, bias=True)
+      )
+      (4-5): 2 x Sequential(
+        (0): Linear(in_features=64, out_features=64, bias=True)
+        (1): LeakyReLU(negative_slope=0.01)
+        (2): Linear(in_features=64, out_features=64, bias=True)
+      )
+      (6-7): 2 x Sequential(
+        (0): Linear(in_features=64, out_features=128, bias=True)
+        (1): LeakyReLU(negative_slope=0.01)
+        (2): Linear(in_features=128, out_features=128, bias=True)
+      )
+      (8): Sequential(
+        (0): Linear(in_features=64, out_features=256, bias=True)
+        (1): LeakyReLU(negative_slope=0.01)
+        (2): Linear(in_features=256, out_features=256, bias=True)
+      )
+    )
+    (laynorm_up): ModuleList(
+      (0): LayerNorm(8, affine=True, mode=graph)
+      (1): LayerNorm(16, affine=True, mode=graph)
+      (2-3): 2 x LayerNorm(32, affine=True, mode=graph)
+      (4-5): 2 x LayerNorm(64, affine=True, mode=graph)
+      (6-7): 2 x LayerNorm(128, affine=True, mode=graph)
+      (8): LayerNorm(256, affine=True, mode=graph)
+    )
+    (layop_up1): ModuleList(
+      (0): SAGEConv(8, 8, aggr=mean)
+      (1): SAGEConv(16, 8, aggr=mean)
+      (2-3): 2 x SAGEConv(32, 16, aggr=mean)
+      (4-5): 2 x SAGEConv(64, 32, aggr=mean)
+      (6-7): 2 x SAGEConv(128, 64, aggr=mean)
+      (8): SAGEConv(256, 128, aggr=mean)
+    )
+    (layop_up2): ModuleList(
+      (0): SAGEConv(8, 8, aggr=mean)
+      (1): SAGEConv(8, 16, aggr=mean)
+      (2): SAGEConv(16, 16, aggr=mean)
+      (3): SAGEConv(16, 32, aggr=mean)
+      (4): SAGEConv(32, 32, aggr=mean)
+      (5): SAGEConv(32, 64, aggr=mean)
+      (6): SAGEConv(64, 64, aggr=mean)
+      (7): SAGEConv(64, 128, aggr=mean)
+      (8): SAGEConv(128, 128, aggr=mean)
+    )
+    (layop_last): Linear(in_features=128, out_features=2, bias=True)
+    (activation): LeakyReLU(negative_slope=0.01)
+  )
+)
+Number of (learnable) params: 474934
+Run forward and backward process on one graph for illustration...
+Plot illustration of forward and backward process on one graph (2D)...
+Generate node features from random noise on known topology (one graph from the test set)...
+Plot generated graph (from known topology from test set) (2D)...
+Generate node features from random noise on known topology (any weird topology)...
+Plot generated graph (from (any weird) known topology) (2D)...
+Generate node features from one graph topology from the test set (known topology) - several realizations...
+Plot first realizations of generated graphs from one known topology (from test set) (2D)...
+Plot single selected realization of generated graphs from one known topology (from test set) (2D)...
+Plot histogram of node features...
+/var/spool/slurm/slurmd/job647895/slurm_script: line 49: timediff: command not found
+
+Elapsed time in sec. : 
