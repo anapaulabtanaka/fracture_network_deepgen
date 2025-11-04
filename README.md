@@ -36,6 +36,7 @@ In the "data" folder, you will find:
 ## Deep graph generation
 
 For the GraphRNN and DDPM please check: [https://github.com/ERC-Karst/karst_networks_gen](https://github.com/ERC-Karst/karst_networks_gen_public/tree/v1.0.0)
+
 10.5281/zenodo.15090730
 
 In: Lauzon, D., Straubhaar, J., Renard, P. A deep generative model for the simulation of discrete karst networks. Earth and Space Science, 12. https://doi.org/10.1029/2025EA004360
