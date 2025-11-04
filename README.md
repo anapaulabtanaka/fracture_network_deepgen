@@ -35,19 +35,18 @@ In the "data" folder, you will find:
 
 ## Deep graph generation
 
-For the GraphRNN and DDPM please check: [ERC-Karst/karst_networks_gen](https://github.com/ERC-Karst/karst_networks_gen)
+For the GraphRNN and DDPM please check: [https://github.com/ERC-Karst/karst_networks_gen](https://github.com/ERC-Karst/karst_networks_gen_public/tree/v1.0.0)
+10.5281/zenodo.15090730
 
-In: Lauzon, D., Straubhaar, J., Renard, P. Forthcoming. Exploring deep generative model for stochastic simulation of karst networks. Earth and Space Sciences.
+In: Lauzon, D., Straubhaar, J., Renard, P. A deep generative model for the simulation of discrete karst networks. Earth and Space Science, 12. https://doi.org/10.1029/2025EA004360
 
-
-A genetic algorithm can be found here in this repository, in test phase.
 
 
 ## Dependencies
 Use the package manager [pip](https://pip.pypa.io/en/stable/) to install the following packages.
 
 ```bash
-pip install 
+pip install matplotlib, numpy, scipy, networkx, pyvista, karstnet, pytorch, torch_geometric, cuda
 ```
 ## Examples
 
