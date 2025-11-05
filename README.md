@@ -55,18 +55,18 @@ pip install matplotlib, numpy, scipy, networkx, pyvista, karstnet, pytorch, torc
 The notebooks examples are from karst_networks_gen_public:
 
 
-00_graphData_collection.ipynb : generate a collection of subgraphs (from the main graph) for data set and test set.
+`00_graphData_collection.ipynb` : generate a collection of subgraphs (from the main graph) for data set and test set.
 
-01_graphRNN_model_train.ipynb : define and train the GraphRNN model.
+`01_graphRNN_model_train.ipynb` : define and train the GraphRNN model.
 
-02_graphRNN_model_play.ipynb (optional step) : play / test the Graph RNN model for graph generation (topology only).
+`02_graphRNN_model_play.ipynb` (optional step) : play / test the Graph RNN model for graph generation (topology only).
 
-03_graphDDPM_model_train.ipynb : define and train the GraphDDPM model for node features generation.
+`03_graphDDPM_model_train.ipynb` : define and train the GraphDDPM model for node features generation.
 
-04_graphDDPM_model_play.ipynb (optional step) : play / test the Graph DDPM model for node features generation.
+`04_graphDDPM_model_play.ipynb` (optional step) : play / test the Graph DDPM model for node features generation.
 
-05_gen_graph.ipynb : generate an ensemble of graphs (topology + node features) : the topology is generated using the Graph RNN model, then the node features are generated using Graph DDPM model.
+`05_gen_graph.ipynb` : generate an ensemble of graphs (topology + node features) : the topology is generated using the Graph RNN model, then the node features are generated using Graph DDPM model.
 
-06_gen_graph_anim.ipynb (optional step) : animation of the denoising process.
+`06_gen_graph_anim.ipynb` (optional step) : animation of the denoising process.
 
-07_gen_graph_stats.ipynb : compute statistics on generated graphs and on the graphs from the data set.
+`07_gen_graph_stats.ipynb` : compute statistics on generated graphs and on the graphs from the data set.
