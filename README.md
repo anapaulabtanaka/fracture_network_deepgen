@@ -52,7 +52,7 @@ pip install matplotlib, numpy, scipy, networkx, pyvista, karstnet, pytorch, torc
 ```
 ## Examples
 
-You will find the notebooks examples in the folder "kgenA_Tsanfleuron_00", they are from [https://github.com/ERC-Karst/karst_networks_gen](https://github.com/ERC-Karst/karst_networks_gen_public/tree/v1.0.0):
+You will find the notebooks examples in the folder "gen_Tsanfleuron", "gen_Tsanfleuron_simple" and "gen_Tsanfleuron3d, they are based in the examples from [https://github.com/ERC-Karst/karst_networks_gen](https://github.com/ERC-Karst/karst_networks_gen_public/tree/v1.0.0):
 
 
 `00_graphData_collection.ipynb` : generate a collection of subgraphs (from the main graph) for data set and test set.
