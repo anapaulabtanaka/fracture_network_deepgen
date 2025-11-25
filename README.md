@@ -32,6 +32,11 @@ In the "data" folder, you will find:
 - Links and nodes for the graph generation with GraphRNN and DDPM
   - Filename: `Tsanfleuron_nodes.dat`
   - Filename: `Tsanfleuron_links.dat`
+ 
+- Fracture networks as graphs for the graph generation with GraphRNN and DDPM
+  - Filename: `tsan_largest_cc.pickle`
+  - Filename: `tsansimple_largest_cc.pickle`
+  - Filename: `3dtsan.pickle`
 
 ## Deep graph generation
 
@@ -70,3 +75,7 @@ You will find the notebooks examples in the folder "gen_Tsanfleuron", "gen_Tsanf
 `06_gen_graph_anim.ipynb` (optional step) : animation of the denoising process.
 
 `07_gen_graph_stats.ipynb` : compute statistics on generated graphs and on the graphs from the data set.
+
+For the graph generation, extrution and slice extraction:
+
+`2D23D_fracture_networks_graphs.ipynb` : transform a fracture interpretation in graph, extrude the 2D to a 3D network and generate 2D and 3D graphs.
