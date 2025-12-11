@@ -63,7 +63,7 @@ In: Julien Straubhaar. (2025). ERC-Karst/karst_networks_gen_public: Version 1.0.
 Use the package manager [pip](https://pip.pypa.io/en/stable/) to install the following packages.
 
 ```bash
-pip install matplotlib, numpy, scipy, networkx, pyvista, karstnet, pytorch, torch_geometric, cuda
+pip install matplotlib, numpy, scipy, networkx, pyvista, karstnet, pytorch, torch_geometric, cuda, shapely, geopandas
 ```
 ## Examples
 
