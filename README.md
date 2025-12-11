@@ -29,14 +29,24 @@ https://doi.org/10.5281/zenodo.15739431
 ### Files
 In the "data" folder, you will find:
  
-- Links and nodes for the graph generation with GraphRNN and DDPM
+- Links and nodes for the graph generation with GraphRNN and DDPM - Tsanfleuron
   - Filename: `Tsanfleuron_nodes.dat`
   - Filename: `Tsanfleuron_links.dat`
  
-- Fracture networks as graphs for the graph generation with GraphRNN and DDPM
+- Fracture networks as graphs for the graph generation with GraphRNN and DDPM - Tsanfleuron
   - Filename: `tsan_largest_cc.pickle`
   - Filename: `tsansimple_largest_cc.pickle`
   - Filename: `3dtsan.pickle`
+ 
+- Fracture networks as graphs for the graph generation with GraphRNN and DDPM - Fracture patterns
+  - Filename: `braided.pickle`
+  - Filename: `brick.pickle`
+  - Filename: `diamond.pickle`
+  - Filename: `hexagon.pickle`
+  - Filename: `pavement.pickle`
+  - Filename: `polygonal.pickle`
+  - Filename: `star.pickle`
+  - Filename: `stochastic.pickle`
 
 ## Deep graph generation
 
@@ -78,4 +88,6 @@ You will find the notebooks examples in the folder "gen_Tsanfleuron", "gen_Tsanf
 
 For the graph generation, extrution and slice extraction:
 
-`2D23D_fracture_networks_graphs.ipynb` : transform a fracture interpretation in graph, extrude the 2D to a 3D network and generate 2D and 3D graphs.
+`shape2graph.ipynb` : transform a fracture interpretation in graph, plot and export.
+
+`2D23D_fracture_networks_graphs.ipynb` : extrude the 2D graph to a 3D network and generate 2D and 3D graphs.
