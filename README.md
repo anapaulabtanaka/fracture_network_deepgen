@@ -67,14 +67,15 @@ pip install matplotlib, numpy, scipy, networkx, pyvista, karstnet, pytorch, torc
 ```
 ## Examples
 
-For the graph generation, extrution and slice extraction:
+To transforme fracture networks in graphs, extrude and slice extraction:
 
 `shape2graph.ipynb` : transform a fracture interpretation in graph, plot and export.
 
 `2D23D_fracture_networks_graphs.ipynb` : extrude the 2D graph to a 3D network and generate 2D and 3D graphs.
 
 
-You will find the notebooks examples in the folder "gen_Tsanfleuron", "gen_Tsanfleuron_simple" and "gen_Tsanfleuron3d, they are based in the examples from [https://github.com/ERC-Karst/karst_networks_gen](https://github.com/ERC-Karst/karst_networks_gen_public/tree/v1.0.0):
+For the deep generation of networks the examples are grouped in the folders "gen_{scenario_name}".
+They are based in the examples from [https://github.com/ERC-Karst/karst_networks_gen](https://github.com/ERC-Karst/karst_networks_gen_public/tree/v1.0.0):
 
 
 `00_graphData_collection.ipynb` : generate a collection of subgraphs (from the main graph) for data set and test set.
