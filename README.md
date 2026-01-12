@@ -8,9 +8,9 @@ Example of fracture networks deep generation using GraphRNN and DDPM.
 
 This repository is associated with forthcoming paper:
 
-**Fracture network generation using graph deep learning**
+**Natural fracture network generation using graph deep learning**
 
-Ana Paula Burgoa Tanaka <sup>*</sup>, Philippe Renard, Julien Straubhaar, Xiao Xia Liang 
+Ana Paula Burgoa Tanaka <sup>*</sup>, Philippe Renard, Julien Straubhaar, Xiao Xia Liang, Dany Lauzon 
 
 
 ## Journal reference
@@ -36,7 +36,6 @@ In the "data" folder, you will find:
 - Fracture networks as graphs for the graph generation with GraphRNN and DDPM - Tsanfleuron
   - Filename: `tsan_largest_cc.pickle`
   - Filename: `tsansimple_largest_cc.pickle`
-  - Filename: `3dtsan.pickle`
  
 - Fracture networks as graphs for the graph generation with GraphRNN and DDPM - Fracture patterns
   - Filename: `braided.pickle`
@@ -66,13 +65,6 @@ Use the package manager [pip](https://pip.pypa.io/en/stable/) to install the fol
 pip install matplotlib, numpy, scipy, networkx, pyvista, karstnet, pytorch, torch_geometric, cuda, shapely, geopandas
 ```
 ## Examples
-
-To transforme fracture networks in graphs, extrude and slice extraction:
-
-`shape2graph.ipynb` : transform a fracture interpretation in graph, plot and export.
-
-`2D23D_fracture_networks_graphs.ipynb` : extrude the 2D graph to a 3D network and generate 2D and 3D graphs.
-
 
 For the deep generation of networks the examples are grouped in the folders "gen_{scenario_name}".
 They are based in the examples from [https://github.com/ERC-Karst/karst_networks_gen](https://github.com/ERC-Karst/karst_networks_gen_public/tree/v1.0.0):
