@@ -47,13 +47,13 @@ In the "data" folder, you will find:
   - Filename: `stochastic.pickle`
 
 ## Dependencies
-Use the package manager [pip](https://pip.pypa.io/en/stable/) to install the following packages.
+Use the package manager [pip](https://pip.pypa.io/en/stable/) to install the following packages
 
 ```bash
 pip install matplotlib, numpy, scipy, networkx, pyvista, karstnet, pytorch, torch_geometric, cuda, shapely, geopandas
 ```
 
-## Graph generation based on the method proposed for karst generation:
+## Generation based on the method proposed for karst generation
 
 For the GraphRNN and DDPM please check: [https://github.com/ERC-Karst/karst_networks_gen](https://github.com/ERC-Karst/karst_networks_gen_public/tree/v1.0.0)
 
