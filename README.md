@@ -68,7 +68,8 @@ In: Julien Straubhaar. (2025). ERC-Karst/karst_networks_gen_public: Version 1.0.
 
 The jupyter notebook examples are from the karst_networks_gen repository (reference above).
 
-For the generation of fracture networks the examples are grouped in the folders "gen_{scenario_name}".
+For the generation of fracture networks the examples are grouped in the folders "gen_{scenario_name}":
+
 
 
 `00_graphData_collection.ipynb` : generate a collection of subgraphs (from the main graph) for data set and test set.
