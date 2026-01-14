@@ -52,10 +52,22 @@ Use the package manager [pip](https://pip.pypa.io/en/stable/) to install the fol
 ```bash
 pip install matplotlib, numpy, scipy, networkx, pyvista, karstnet, pytorch, torch_geometric, cuda, shapely, geopandas
 ```
+
+## Graph generation based on the method proposed for karst generation:
+
+For the GraphRNN and DDPM please check: [https://github.com/ERC-Karst/karst_networks_gen](https://github.com/ERC-Karst/karst_networks_gen_public/tree/v1.0.0)
+
+
+In: Lauzon, D., Straubhaar, J., Renard, P. A deep generative model for the simulation of discrete karst networks. Earth and Space Science, 12. https://doi.org/10.1029/2025EA004360
+
+
+In: Julien Straubhaar. (2025). ERC-Karst/karst_networks_gen_public: Version 1.0.0, submitted to Earth and Space Science (v1.0.0). Zenodo. https://doi.org/10.5281/zenodo.15090730
+
+
 ## Examples
 
 For the deep generation of networks the examples are grouped in the folders "gen_{scenario_name}".
-They are based in the examples from [https://github.com/ERC-Karst/karst_networks_gen](https://github.com/ERC-Karst/karst_networks_gen_public/tree/v1.0.0):
+The jupyter notebook examples are from the karst_networks_gen repository (reference above):
 
 
 `00_graphData_collection.ipynb` : generate a collection of subgraphs (from the main graph) for data set and test set.
@@ -74,12 +86,4 @@ They are based in the examples from [https://github.com/ERC-Karst/karst_networks
 
 `07_gen_graph_stats.ipynb` : compute statistics on generated graphs and on the graphs from the data set.
 
-## Graph generation based on the method proposed for karst generation:
 
-For the GraphRNN and DDPM please check: [https://github.com/ERC-Karst/karst_networks_gen](https://github.com/ERC-Karst/karst_networks_gen_public/tree/v1.0.0)
-
-
-In: Lauzon, D., Straubhaar, J., Renard, P. A deep generative model for the simulation of discrete karst networks. Earth and Space Science, 12. https://doi.org/10.1029/2025EA004360
-
-
-In: Julien Straubhaar. (2025). ERC-Karst/karst_networks_gen_public: Version 1.0.0, submitted to Earth and Space Science (v1.0.0). Zenodo. https://doi.org/10.5281/zenodo.15090730
