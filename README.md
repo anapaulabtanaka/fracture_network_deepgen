@@ -1,16 +1,22 @@
 # fracture_network_deepgen
-Example of fracture networks deep generation using GraphRNN and DDPM.
+Example of fracture networks generation using GraphRNN and DDPM.
 
 <br>
 <img src="./anim/06_00_anim_2d.gif" alt="ddpm">
 <br/>
 
 
-This repository is associated with forthcoming paper:
+This repository is associated with forthcoming abstract and paper:
+
+**Fracture network modeling with graph deep learning**
+
+Ana Paula Burgoa Tanaka, Philippe Renard, Xiao Xia Liang, Julien Straubhaar, Dany Lauzon 
+
+
 
 **Natural fracture network generation using graph deep learning**
 
-Ana Paula Burgoa Tanaka <sup>*</sup>, Philippe Renard, Julien Straubhaar, Xiao Xia Liang, Dany Lauzon 
+Ana Paula Burgoa Tanaka, Philippe Renard, Julien Straubhaar, Xiao Xia Liang, Dany Lauzon 
 
 
 ## Journal reference
@@ -29,15 +35,11 @@ https://doi.org/10.5281/zenodo.15739431
 ### Files
 In the "data" folder, you will find:
  
-- Links and nodes for the graph generation with GraphRNN and DDPM - Tsanfleuron
-  - Filename: `Tsanfleuron_nodes.dat`
-  - Filename: `Tsanfleuron_links.dat`
- 
 - Fracture networks as graphs for the graph generation with GraphRNN and DDPM - Tsanfleuron
   - Filename: `tsan_largest_cc.pickle`
   - Filename: `tsansimple_largest_cc.pickle`
  
-- Fracture networks as graphs for the graph generation with GraphRNN and DDPM - Fracture patterns
+- Fracture networks as graphs for the graph generation - Fracture patterns
   - Filename: `braided.pickle`
   - Filename: `brick.pickle`
   - Filename: `diamond.pickle`
@@ -46,17 +48,6 @@ In the "data" folder, you will find:
   - Filename: `polygonal.pickle`
   - Filename: `star.pickle`
   - Filename: `stochastic.pickle`
-
-## Deep graph generation
-
-For the GraphRNN and DDPM please check: [https://github.com/ERC-Karst/karst_networks_gen](https://github.com/ERC-Karst/karst_networks_gen_public/tree/v1.0.0)
-
-
-In: Lauzon, D., Straubhaar, J., Renard, P. A deep generative model for the simulation of discrete karst networks. Earth and Space Science, 12. https://doi.org/10.1029/2025EA004360
-
-
-In: Julien Straubhaar. (2025). ERC-Karst/karst_networks_gen_public: Version 1.0.0, submitted to Earth and Space Science (v1.0.0). Zenodo. https://doi.org/10.5281/zenodo.15090730
-
 
 ## Dependencies
 Use the package manager [pip](https://pip.pypa.io/en/stable/) to install the following packages.
@@ -85,3 +76,13 @@ They are based in the examples from [https://github.com/ERC-Karst/karst_networks
 `06_gen_graph_anim.ipynb` (optional step) : animation of the denoising process.
 
 `07_gen_graph_stats.ipynb` : compute statistics on generated graphs and on the graphs from the data set.
+
+## Graph generation based on the method proposed for karst generation:
+
+For the GraphRNN and DDPM please check: [https://github.com/ERC-Karst/karst_networks_gen](https://github.com/ERC-Karst/karst_networks_gen_public/tree/v1.0.0)
+
+
+In: Lauzon, D., Straubhaar, J., Renard, P. A deep generative model for the simulation of discrete karst networks. Earth and Space Science, 12. https://doi.org/10.1029/2025EA004360
+
+
+In: Julien Straubhaar. (2025). ERC-Karst/karst_networks_gen_public: Version 1.0.0, submitted to Earth and Space Science (v1.0.0). Zenodo. https://doi.org/10.5281/zenodo.15090730
