@@ -32,19 +32,26 @@ https://doi.org/10.5281/zenodo.15739431
 ### Files
 In the "data" folder, you will find:
  
-- Fracture networks as graphs for the graph generation with GraphRNN and DDPM - Tsanfleuron
+- Reference fracture network graph for the generation of new netwroks with GraphRNN and DDPM - Tsanfleuron
   - Filename: `tsan_largest_cc.pickle`
   - Filename: `tsansimple_largest_cc.pickle`
  
-- Fracture networks as graphs for the graph generation - Fracture patterns
-  - Filename: `braided.pickle`
-  - Filename: `brick.pickle`
-  - Filename: `diamond.pickle`
-  - Filename: `hexagon.pickle`
-  - Filename: `pavement.pickle`
-  - Filename: `polygonal.pickle`
-  - Filename: `star.pickle`
-  - Filename: `stochastic.pickle`
+- Fracture networks as graphs for model learning - From fracture network open datasets and build patterns and synthetic networks
+  - Synthetic patterns: `braided.pickle`, `brick.pickle`, `diamond.pickle`, `hexagon.pickle`, `pavement.pickle`, `polygonal.pickle`, `star.pickle`, `stochastic.pickle`, `abutments.pickle`, `conjugate.pickle`, `splays.pickle`, `voronoi.pickle`
+  - Outcrop patterns: `out_braided.pickle`, `out_brick.pickle`, `out_diamond.pickle`, `out_hexagon.pickle`, `out_pavement.pickle`, `out_polygonal.pickle`, `out_star.pickle`, `out_stochastic.pickle`
+  - Aland Island (Finland): `.pickle`
+  - Apodi (Brazil): `.pickle`
+  - Brejoes (Brazil): `.pickle`
+  - Bristol Channel (UK): `pickle`
+  - Vristol Patterns (UK):
+  - Coastal (Ireland): `.pickle`
+  - Forsmark (Sweden): `.pickle`
+  - Mineral Mountains (USA): `.pickle`
+  - Synthetic offshore (Brazil): `.pickle`
+  - Tsanfleuron (Switzerland): `.pickle`
+  - Parmelan (Frace): `.pickle`
+  
+  - Salta (Argentina): `.pickle`
 
 ## Dependencies
 Use the package manager [pip](https://pip.pypa.io/en/stable/) to install the following packages
@@ -66,11 +73,14 @@ In: Julien Straubhaar. (2025). ERC-Karst/karst_networks_gen_public: Version 1.0.
 
 ## Examples
 
-The jupyter notebook examples are from the karst_networks_gen repository (reference above).
+For transformation of the fracture network interpretation in graphs, definition of most connected components, set identification, length and azimuth calculation, storage and export:
 
-For the generation of fracture networks the examples are grouped in the folders "gen_{scenario_name}":
+`Generate graph and export largest connected component` : generate graph from interpretation, defining most connected components and exporting subgraphs.
+
+`Set definition, length and azimuth calculation and storage` : set identification, length and azimuth calculation and storage as attributes.
 
 
+For the generation of fracture networks the examples are grouped in the folders "gen_{scenario_name}". The examples are from the karst_networks_gen repository (reference above).
 
 `00_graphData_collection.ipynb` : generate a collection of subgraphs (from the main graph) for data set and test set.
 
