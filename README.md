@@ -20,14 +20,32 @@ Ana Paula Burgoa Tanaka, Philippe Renard, Julien Straubhaar, Xiao Xia Liang, Dan
 Forthcoming
 
 ## Data description
-Open fracture networks interpretation data from: 
+Reference fracture network interpretation data from: 
 
 Graph-based fracture network analysis to integrate structural geology properties and identify preferential flow pathways in the aquifer system of Tsanfleuron, Swiss Alps. Journal of Structural Geology. Volume 201.
 
 https://github.com/anapaulabtanaka/tsanfleuron_fracture_networks
-
-
 https://doi.org/10.5281/zenodo.15739431
+
+
+Training dataset from various open datasets of fracture interpretation:
+
+Aland Island (Finland): https://doi.org/10.5281/zenodo.4719627
+Apodi (Brazil): https://doi.org/10.4121/uuid:988152da-3ac3-44cb-9d87-c7365e3707b6
+Australia: https://doi.org/10.26180/5cdcad0a73fe0
+Brejoes (Brazil): https://doi.org/10.4121/uuid:67cde05c-9e99-4cc4-8cec-9f2666457d1f
+Bristol Channel (UK): https://doi.org/10.4121/14039234.v1
+Bristol Patterns (UK): https://doi.org/10.5194/se-11-1773-2020
+Coastal (Ireland): https://www.data.gov.uk/dataset/c8cc3d41-f5ec-4661-9d9b-75bff515b3c5/fault-or-fracture-trace4
+Forsmark (Sweden): https://zenodo.org/records/4250778
+Mineral Mountains (USA): https://doi.org/10.15121/1405031
+Outcrop and syntehtic patterns: Generated based in https://doi.org/10.1002/2017WR020943
+Synthetic offshore (Brazil): Generated based in https://doi.org/10.1016/j.marpetgeo.2021.105392
+Tsanfleuron (Switzerland): Same as reference fracture network
+
+Parmelan (France): https://doi.org/10.4121/uuid:3f5e255f-edf7-441f-89f2-1adc7ac2f7d1
+Salta (Argentina): Generated based in 
+
 
 ### Files
 In the "data" folder, you will find:
@@ -36,11 +54,12 @@ In the "data" folder, you will find:
   - Filename: `tsan_largest_cc.pickle`
   - Filename: `tsansimple_largest_cc.pickle`
  
-- Fracture networks as graphs for model learning - From fracture network open datasets and build patterns and synthetic networks
-  - Synthetic patterns: `braided.pickle`, `brick.pickle`, `diamond.pickle`, `hexagon.pickle`, `pavement.pickle`, `polygonal.pickle`, `star.pickle`, `stochastic.pickle`, `abutments.pickle`, `conjugate.pickle`, `splays.pickle`, `voronoi.pickle`
+- Fracture networks as graphs for model learning - From fracture network open datasets and build synthetic networks
+  - Synthetic patterns: `brick.pickle`, `diamond.pickle`, `hexagon.pickle`, `pavement.pickle`, `polygonal.pickle`, `star.pickle`, `stochastic.pickle`
   - Outcrop patterns: `out_braided.pickle`, `out_brick.pickle`, `out_diamond.pickle`, `out_hexagon.pickle`, `out_pavement.pickle`, `out_polygonal.pickle`, `out_star.pickle`, `out_stochastic.pickle`
   - Aland Island (Finland): `.pickle`
   - Apodi (Brazil): `.pickle`
+  - Australia: 
   - Brejoes (Brazil): `.pickle`
   - Bristol Channel (UK): `pickle`
   - Vristol Patterns (UK):
@@ -49,9 +68,12 @@ In the "data" folder, you will find:
   - Mineral Mountains (USA): `.pickle`
   - Synthetic offshore (Brazil): `.pickle`
   - Tsanfleuron (Switzerland): `.pickle`
-  - Parmelan (Frace): `.pickle`
-  
-  - Salta (Argentina): `.pickle`
+
+  - Parmelan (Frace): `.pickle` -to add-verify geometry-
+  - Salta (Argentina): `.pickle` -to add-verify geometry-
+ 
+- Pre-processed graphs for training derived from the above networks
+  - Filename: `G0.pickle`, `G1.pickle`, ..., `G176.pickle`
 
 ## Dependencies
 Use the package manager [pip](https://pip.pypa.io/en/stable/) to install the following packages
