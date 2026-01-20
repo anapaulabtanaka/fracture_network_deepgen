@@ -24,13 +24,16 @@ Reference fracture network interpretation data from:
 
 Graph-based fracture network analysis to integrate structural geology properties and identify preferential flow pathways in the aquifer system of Tsanfleuron, Swiss Alps. Journal of Structural Geology. Volume 201.
 
+https://doi.org/10.1016/j.jsg.2025.105543
+
+
 https://github.com/anapaulabtanaka/tsanfleuron_fracture_networks
 
 
-https://doi.org/10.5281/zenodo.15739431
 
 
 Training dataset from various open datasets of fracture interpretation:
+
 
 Aland Island (Finland): https://doi.org/10.5281/zenodo.4719627
 
@@ -65,7 +68,7 @@ Outcrop and syntehtic patterns: Generated based in https://doi.org/10.1002/2017W
 Synthetic offshore (Brazil): Generated based in https://doi.org/10.1016/j.marpetgeo.2021.105392
 
 
-Tsanfleuron (Switzerland): Same as reference fracture network
+Tsanfleuron (Switzerland): https://doi.org/10.5281/zenodo.15739431
 
 Parmelan (France): https://doi.org/10.4121/uuid:3f5e255f-edf7-441f-89f2-1adc7ac2f7d1
 
