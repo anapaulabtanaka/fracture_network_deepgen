@@ -44,7 +44,7 @@ Apodi (Brazil): https://doi.org/10.4121/uuid:988152da-3ac3-44cb-9d87-c7365e3707b
 Australia: https://doi.org/10.26180/5cdcad0a73fe0
 
 
-Brejoes (Brazil): https://doi.org/10.4121/uuid:67cde05c-9e99-4cc4-8cec-9f2666457d1f
+Brejoes (Brazil) manual: https://doi.org/10.4121/uuid:67cde05c-9e99-4cc4-8cec-9f2666457d1f
 
 
 Bristol Channel (UK): https://doi.org/10.4121/14039234.v1
@@ -70,10 +70,6 @@ Synthetic offshore (Brazil): Generated based in https://doi.org/10.1016/j.marpet
 
 Tsanfleuron (Switzerland): https://doi.org/10.5281/zenodo.15739431
 
-Parmelan (France): https://doi.org/10.4121/uuid:3f5e255f-edf7-441f-89f2-1adc7ac2f7d1
-
-
-Salta (Argentina): Generated based in 
 
 
 
