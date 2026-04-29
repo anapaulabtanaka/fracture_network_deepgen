@@ -82,25 +82,7 @@ In the "data" folder, you will find:
   - Filename: `tsan_largest_cc.pickle`
   - Filename: `tsansimple_largest_cc.pickle`
  
-- Fracture networks as graphs for model learning - From fracture network open datasets and build synthetic networks
-  - Synthetic patterns: `brick.pickle`, `diamond.pickle`, `hexagon.pickle`, `pavement.pickle`, `polygonal.pickle`, `star.pickle`, `stochastic.pickle`
-  - Outcrop patterns: `out_braided.pickle`, `out_brick.pickle`, `out_diamond.pickle`, `out_hexagon.pickle`, `out_pavement.pickle`, `out_polygonal.pickle`, `out_star.pickle`, `out_stochastic.pickle`
-  - Aland Island (Finland): `.pickle`
-  - Apodi (Brazil): `.pickle`
-  - Australia: 
-  - Brejoes (Brazil): `.pickle`
-  - Bristol Channel (UK): `pickle`
-  - Vristol Patterns (UK):
-  - Coastal (Ireland): `.pickle`
-  - Forsmark (Sweden): `.pickle`
-  - Mineral Mountains (USA): `.pickle`
-  - Synthetic offshore (Brazil): `.pickle`
-  - Tsanfleuron (Switzerland): `.pickle`
-
-  - Parmelan (Frace): `.pickle` -to add-verify geometry-
-  - Salta (Argentina): `.pickle` -to add-verify geometry-
- 
-- Pre-processed graphs for training derived from the above networks
+- Pre-processed graphs for training derived from the open datasets
   - Filename: `G0.pickle`, `G1.pickle`, ..., `G176.pickle`
 
 ## Dependencies
