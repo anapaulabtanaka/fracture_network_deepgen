@@ -6,18 +6,18 @@ Example of fracture networks generation using GraphRNN and DDPM.
 <br/>
 
 
-This repository is associated with forthcoming abstract and paper:
+This repository is associated with accepted abstract and forthcoming paper:
 
 **Fracture network modeling with graph deep learning**
 
 **Natural fracture network generation using graph deep learning**
 
 
-Ana Paula Burgoa Tanaka, Philippe Renard, Julien Straubhaar, Xiao Xia Liang, Dany Lauzon 
-
 
 ## Journal reference
-Forthcoming
+
+“Fracture network modeling with graph deep learning”. In: EGU General Assembly 2026, EGU26–11471.
+Tanaka, A. P. B., P. Renard, J. Straubhaar, X. X. Liang, and D. Lauzon (2026).
 
 ## Data description
 Reference fracture network interpretation data from: 
