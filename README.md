@@ -19,6 +19,8 @@ This repository is associated with accepted abstract and forthcoming paper:
 “Fracture network modeling with graph deep learning”. In: EGU General Assembly 2026, EGU26–11471.
 Tanaka, A. P. B., P. Renard, J. Straubhaar, X. X. Liang, and D. Lauzon (2026).
 
+https://doi.org/10.5194/egusphere-egu26-11471
+
 ## Data description
 Reference fracture network interpretation data from: 
 
