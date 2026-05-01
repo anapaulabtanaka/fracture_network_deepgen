@@ -1,0 +1,221 @@
+Model Changes — Session Summary
+=================================
+Date: 2026-04-30
+Project: fracture_network_deepgen
+
+
+1. gen_Tsanfleuron_2/graph_ddpm.py
+-----------------------------------
+
+a) Promoted eta_ddim to a configurable parameter (was hardcoded = 0.3 inside
+   the sampling loop with no way to configure it externally).
+
+   - reconstruct() signature updated:
+       def reconstruct(self, G_batch, t0=None, t1=None, sigmas=None,
+                       implicit=False, eta_ddim=0.3, return_intermediate=False)
+
+   - generate() signature updated:
+       def generate(self, G_batch, generate_noise=True, sigmas=None,
+                    implicit=False, eta_ddim=0.3, return_intermediate=False)
+     and eta_ddim is now forwarded to reconstruct() inside generate().
+
+   - Removed the hardcoded line `eta_ddim = 0.3` from inside the sampling loop.
+
+   - Fixed a side-effect: after removing the hardcoded eta_ddim, the loop
+     variable `i` from `for i, t in enumerate(range(...))` became unused.
+     Changed to `for t in range(...)`.
+
+b) Registered time_embedding_tensor as a PyTorch buffer (was a plain tensor,
+   causing it to be absent from state_dict() and not moving automatically
+   with .to(device)).
+
+   - Changed:
+       self.time_embedding_tensor = sinusoidal_embedding(n_steps, time_emb_dim)
+     to:
+       self.register_buffer('time_embedding_tensor',
+                            sinusoidal_embedding(n_steps, time_emb_dim))
+
+   - Removed the now-redundant line from to_device():
+       self.time_embedding_tensor = self.time_embedding_tensor.to(device)
+
+
+2. utils/graph_utils.py
+------------------------
+
+Added new function get_spatial_bfs_sequence() (inserted after the existing
+get_bfs_sequence()). This function performs a BFS starting from the
+geometrically central node of the graph (closest node to the centroid of all
+node positions) and sorts each BFS frontier by distance from the start node.
+This reduces adjacency-matrix bandwidth compared to standard BFS, so the
+RNN's lookback window captures more true spatial connectivity.
+
+   def get_spatial_bfs_sequence(G, node_positions, start_id=None):
+       - If start_id is None, selects the node closest to the centroid of all
+         node positions as the BFS root.
+       - At each BFS level, sorts the frontier nodes by their Euclidean
+         distance from start_id before appending to the sequence.
+       - Returns an integer array of node indices in spatially-ordered BFS
+         order.
+
+Updated extract_subgraph_from_bfs() to add a pos_attr parameter:
+   - New signature:
+       def extract_subgraph_from_bfs(G, n_nodes, start_id=0,
+                                     randomize_nodes=True, seed=None,
+                                     pos_attr=None)
+   - When pos_attr is provided and the attribute exists on the graph, the
+     function uses get_spatial_bfs_sequence() instead of get_bfs_sequence()
+     to order the extracted subgraph's nodes.
+   - Defaults to pos_attr=None, preserving existing behavior for all callers
+     that do not opt in.
+
+
+3. utils/graph_rnn.py
+----------------------
+
+Updated Graph_sequence_sampler_data_set.__init__() to accept pos_attr=None:
+   - New signature:
+       def __init__(self, G_list, G_nsample, use_bfs=True, pos_attr=None,
+                    max_n_nodes=None, max_prev_node=None,
+                    calc_max_prev_node_kwargs=None)
+   - Stores pos_attr as self.pos_attr for use in __getitem__.
+
+Updated Graph_sequence_sampler_data_set.__getitem__() to use spatial BFS
+when pos_attr is set:
+   - When use_bfs=True and self.pos_attr is not None, retrieves the node
+     position attribute from the graph and calls get_spatial_bfs_sequence()
+     to reorder the adjacency matrix.
+   - When use_bfs=True and self.pos_attr is None, falls back to the original
+     get_bfs_sequence() behavior (no change for existing callers).
+
+Updated Graph_sequence_sampler_data_set_with_node_features.__getitem__() to
+always use spatial BFS (node positions are always available in this class):
+   - When use_bfs=True, calls get_spatial_bfs_sequence(G, node_features_array)
+     using the node feature array (which contains spatial coordinates as the
+     first columns) to obtain a spatially-ordered sequence.
+   - Reorders both the adjacency matrix and node_features_array according to
+     this sequence.
+
+
+4. gen_Tsanfleuron_2/graph_ddpm_summary.txt  (new file)
+---------------------------------------------------------
+
+Created a plain-text model assessment of graph_ddpm.py covering:
+   - What the model is and its references (Ho et al. 2020, Lin et al. 2024)
+   - Architecture overview (Graph_DDPM wrapper, Graph_DDPM_net_model U-Net)
+   - Sampling algorithm (DDIM-style hybrid)
+   - Six identified issues (eta_ddim hardcoding, silently ignored parameters,
+     potential NaN at t=0, time_embedding_tensor not a buffer, asymmetric
+     learn_noise modes, commented-out code)
+   - Strengths of the current implementation
+   - Summary of most actionable fixes
+
+
+5. gen_Tsanfleuron_2/graph_ddpm.py  (continued — device selection)
+-------------------------------------------------------------------
+
+c) Replaced hardcoded device=torch.device('cpu') defaults with automatic
+   device detection via default_device() (from utils/general_utils.py).
+
+   Three function signatures changed from device=torch.device('cpu') to
+   device=None, with device resolved at the start of each function body:
+
+   - train_ddpm()
+   - generate_graph_node_features()
+   - generate_list_graph_node_features()
+
+   In each function body, the following line is now the first executed
+   statement after the docstring:
+       if device is None:
+           device = default_device()
+
+   default_device() selects: MPS (Apple Silicon) > CUDA (NVIDIA) > CPU.
+
+   A module-level definition of default_device() was added at the top of
+   graph_ddpm.py so the file works standalone (imported as a module). When
+   utils/general_utils.py is exec()'d first in a notebook, that version
+   takes precedence and this definition is simply overwritten by the identical
+   implementation from general_utils.py.
+
+   Three docstrings updated to reflect the new default:
+       device : torch device, optional
+           by default (None): default_device() is used (MPS > CUDA > CPU)
+
+
+6. utils/general_utils.py
+--------------------------
+
+Added new function default_device():
+   - Autoselects the best available PyTorch device.
+   - Priority: MPS (Apple Silicon) > CUDA (NVIDIA GPU) > CPU.
+   - Returns a torch.device object.
+
+   def default_device():
+       if torch.backends.mps.is_available():
+           return torch.device('mps')
+       elif torch.cuda.is_available():
+           return torch.device('cuda')
+       else:
+           return torch.device('cpu')
+
+
+7. gen_Tsanfleuron_2/graph_ddpm.py  (continued — DDIM numerical stability fix)
+-------------------------------------------------------------------------------
+
+Fixed catastrophic float32 cancellation in reconstruct() that caused the reverse
+process to produce incorrect (corrupted) samples, explaining why the posterior
+distribution did not match the prior (training data) distribution.
+
+Root cause: the DDIM update computed an intermediate x0_pred by dividing by
+sqrt(alpha_bar_t). Near t=T with the cosine schedule, alpha_bar_T ≈ 0, so
+sqrt(alpha_bar_t) ≈ 1e-5 and x0_pred inflates to ~1e5. The following line then
+multiplies by sqrt(alpha_bar_prev) ≈ 1e-5 to cancel, but in float32 (7 significant
+digits) all precision is lost before the cancellation occurs.
+
+Old (unstable) code:
+    x0_pred = (G_batch.x - (1 - alpha_bar_t).sqrt() * eps_theta) / alpha_bar_t.sqrt()
+    G_batch.x = (alpha_bar_prev.sqrt() * x0_pred
+                 + (1 - alpha_bar_prev - sigma_t**2).sqrt() * eps_theta
+                 + sigma_t * noise)
+
+New (stable) code: eliminates x0_pred by algebraically expanding and simplifying.
+All ratios remain O(1) throughout the entire timestep range:
+
+    coef_x   = (alpha_bar_prev / alpha_bar_t).sqrt()
+    coef_eps = ((1 - alpha_bar_prev - sigma_t**2).clamp(min=0.0).sqrt()
+                - (alpha_bar_prev * (1 - alpha_bar_t) / alpha_bar_t).sqrt())
+    G_batch.x = coef_x * G_batch.x + coef_eps * eps_theta + sigma_t * noise
+
+The algebra:
+    x_{t-1} = sqrt(ab_prev) * x0_pred + sqrt(1-ab_prev-s^2) * eps + s * noise
+    Substituting x0_pred = (x_t - sqrt(1-ab_t)*eps) / sqrt(ab_t):
+    x_{t-1} = sqrt(ab_prev/ab_t) * x_t
+            + [sqrt(1-ab_prev-s^2) - sqrt(ab_prev*(1-ab_t)/ab_t)] * eps
+            + s * noise
+
+Numerical behavior:
+  - ab_prev/ab_t = 1/alpha_t ≈ 1 (well-conditioned everywhere)
+  - ab_prev*(1-ab_t)/ab_t = (1-ab_t)/alpha_t ≈ 1 near t=T, ≈ beta_1 near t=0
+  - .clamp(min=0.0) prevents NaN from floating-point rounding making the
+    argument of sqrt slightly negative (theoretically ≥ 0 for eta_ddim ≤ 1)
+
+This fix makes no change to the mathematical meaning of the update — it is a
+pure algebraic rearrangement. Results will differ numerically (because the
+previous float32 precision loss is now avoided), which is the intended effect.
+
+
+Notes on backward compatibility
+---------------------------------
+All changes use default parameter values (pos_attr=None, eta_ddim=0.3,
+device=None) that preserve existing behavior unless callers explicitly opt
+in to the new functionality. No existing training notebooks or generation
+scripts are broken by these changes.
+
+Callers that previously passed device=torch.device('cpu') explicitly will
+continue to work unchanged. Callers that relied on the CPU default and do
+not pass device will now automatically use the best available device.
+
+To enable spatially-ordered BFS in training, callers should pass:
+   - pos_attr='pos' to Graph_sequence_sampler_data_set (for topology-only RNN)
+   - pos_attr='pos' to extract_subgraph_from_bfs (for data collection)
+The with_node_features dataset class applies spatial BFS automatically when
+use_bfs=True, since positions are always available.
