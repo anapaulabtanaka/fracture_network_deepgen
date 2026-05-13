@@ -26,6 +26,17 @@ import torch_geometric
 # # import from package 'geone'
 # import geone as gn
 
+# NOTE: mirrors general_utils.default_device; defined here so the file works
+# standalone. When general_utils.py is exec()'d first in a notebook this is
+# simply redefined to the same implementation.
+def default_device():
+    if torch.backends.mps.is_available():
+        return torch.device('mps')
+    elif torch.cuda.is_available():
+        return torch.device('cuda')
+    else:
+        return torch.device('cpu')
+
 # -----------------------------------------------------------------------------
 # Data set to be used with data loader:
 #   torch_geometric.loader.DataLoader(data_set, batch_size=batch_size, shuffle=True)
@@ -301,33 +312,37 @@ class Graph_DDPM(torch.nn.Module):
         else:
             return G_batch
 
-    def reconstruct(self, G_batch, t0=None, t1=None, sigmas=None, implicit=False, return_intermediate=False):
+    def reconstruct(self, G_batch, t0=None, t1=None, sigmas=None, implicit=False, eta_ddim=0.3, return_intermediate=False):
         """
         Reconstructs data, backward through time steps t0 to t1 (excluded).
-        
+
         Parameters
         ----------
         G_batch : `torch_geometric.data.batch.DataBatch`
             batch of graphs, with:
-            
+
                 - `G_batch.x` : tensor of size `(G_batch.num_nodes, G_batch.num_node_features)`, \
                 attribute onto which the operations are applied
 
         t0, t1 : ints, optional
             `t0 < t1`, starting and ending (excluded) time steps;
             by default: `t0 = 0` and `t1 = self.n_steps` are used
-        
+
         sigmas : float or tensor of size (t1-t0,), optional
-            standard deviation of noise added at each time step of the 
-            reconstruction (backward + sampling process); 
+            standard deviation of noise added at each time step of the
+            reconstruction (backward + sampling process);
             by default (`None`): default values given by the noise schedule
             (square roots of betas) are used
-        
+
         implicit : bool, default: `False`
             - if `True`: no noise is added during the reconstruction, `sigmas` not used
             - if `False`: noise is added during the reconstruction, according to `sigmas`, \
             except at the last step (t0)
-        
+
+        eta_ddim : float, default: 0.3
+            controls stochasticity of the DDIM sampler (only used when `learn_noise=True`);
+            0.0 = fully deterministic DDIM, 1.0 = full DDPM stochasticity
+
         return_intermediate : bool, default: `False`
             - if `True`: starting node features (`G_batch.x`), and node features obtained \
             after each time step (`t1-1, ..., t0`, backward) are returned in a list of \
@@ -373,27 +388,31 @@ class Graph_DDPM(torch.nn.Module):
         #             x_all.append(G_batch.x)
 
         with torch.no_grad():
-            for i, t in enumerate(range(t1-1, t0-1, -1)):
+            for t in range(t1-1, t0-1, -1):
                 if self.learn_noise:
                     # Getting estimation of noise (used from the original image)
                     eta = self.backward(G_batch, torch.full((G_batch.num_graphs,), t).to(self.device))
 
-                    # Trying DDIM
-                    eps_theta = eta #rename noise estimator from the original noise predictor (from original ddpm code)
+                    # DDIM update (numerically stable form — avoids x0_pred intermediate
+                    # which divides by sqrt(alpha_bar_t) ≈ 0 near t=T, causing float32
+                    # catastrophic cancellation when multiplied back by sqrt(alpha_bar_prev))
+                    eps_theta = eta
 
-                    alpha_bar_t = self.alpha_bars[t] #cumulative noise scheduler
+                    alpha_bar_t = self.alpha_bars[t]
                     alpha_bar_prev = self.alpha_bars[t-1] if t>0 else torch.tensor(1.0).to(self.device)
-
-                    x0_pred = (G_batch.x - (1 - alpha_bar_t).sqrt() * eps_theta) / alpha_bar_t.sqrt() #predict clean geometry at each step
-
-                    #Control stochasticity
-                    eta_ddim = 0.3 #parameter to scale stochastic contribution (when eta_ddim=1 it behaves like DDPM, when eta_ddim=0 we get deterministic DDIM)
 
                     sigma_t = (eta_ddim * ((1 - alpha_bar_prev) / (1 - alpha_bar_t)).sqrt() * (1 - alpha_bar_t / alpha_bar_prev).sqrt())
 
                     noise = torch.randn_like(G_batch.x).to(self.device) if t > t0 else 0.0
 
-                    G_batch.x = (alpha_bar_prev.sqrt() * x0_pred + (1 - alpha_bar_prev - sigma_t**2).sqrt() * eps_theta + sigma_t * noise)
+                    # Expanded DDIM: x_{t-1} = sqrt(ab_prev/ab_t)*x_t
+                    #                        + [sqrt(1-ab_prev-sigma^2) - sqrt(ab_prev*(1-ab_t)/ab_t)]*eps
+                    #                        + sigma*noise
+                    coef_x   = (alpha_bar_prev / alpha_bar_t).sqrt()
+                    coef_eps = ((1 - alpha_bar_prev - sigma_t**2).clamp(min=0.0).sqrt()
+                                - (alpha_bar_prev * (1 - alpha_bar_t) / alpha_bar_t).sqrt())
+
+                    G_batch.x = coef_x * G_batch.x + coef_eps * eps_theta + sigma_t * noise
 
                     # Compute image representation at previous time step
                     #DES G_batch.x = 1.0 / self.alphas[t].sqrt() * (G_batch.x - self.betas[t] / (1.0 - self.alpha_bars[t]).sqrt() * eta)
@@ -434,37 +453,41 @@ class Graph_DDPM(torch.nn.Module):
         else:
             return G_batch
 
-    def generate(self, G_batch, generate_noise=True, sigmas=None, implicit=False, return_intermediate=False):
+    def generate(self, G_batch, generate_noise=True, sigmas=None, implicit=False, eta_ddim=0.3, return_intermediate=False):
         """
         Generates data (from gaussian noise), according to DDPM (or DDIM, see `implicit` below).
-        
+
         Parameters
         ----------
         G_batch : `torch_geometric.data.batch.DataBatch`
             batch of graphs, with:
-            
+
             - `G_batch.x` : tensor of size `(G_batch.num_nodes, G_batch.num_node_features)`, \
             attribute onto which the operations are applied
 
             with starting noisy node features
             (`G_batch.x` ignored if `generate_noise=True`, see below)
-        
+
         generate_noise : bool, default: `True`
             - if `True`: gaussian noise (in N(0, 1)) is generated for node features \
             (in `G_batch.x` )
             - if `False`: features in `G_batch.x` are used
-        
+
         sigmas : float or tensor of size (n_steps, ), optional
-            standard deviation of noise added at each time step of the 
-            reconstruction (backward + sampling process); 
+            standard deviation of noise added at each time step of the
+            reconstruction (backward + sampling process);
             by default (`None`): default values given by the noise schedule
             (square roots of betas) are used
-        
+
         implicit : bool, default: `False`
             - if `True`: no noise is added during the reconstruction, `sigmas` not used
             - if `False`: noise is added during the reconstruction, according to `sigmas`, \
             except at the last step (t0)
-        
+
+        eta_ddim : float, default: 0.3
+            controls stochasticity of the DDIM sampler (only used when `learn_noise=True`);
+            0.0 = fully deterministic DDIM, 1.0 = full DDPM stochasticity
+
         return_intermediate : bool, default: `False`
             - if `True`: initial node features (noise), and node features obtained \
             after each time step (`n_steps-1, ..., 0`) are returned in a list of length \
@@ -488,7 +511,7 @@ class Graph_DDPM(torch.nn.Module):
         if generate_noise:
             G_batch.x = torch.randn_like(G_batch.x)
         
-        return self.reconstruct(G_batch, sigmas=sigmas, implicit=implicit, return_intermediate=return_intermediate)
+        return self.reconstruct(G_batch, sigmas=sigmas, implicit=implicit, eta_ddim=eta_ddim, return_intermediate=return_intermediate)
 
     def to_device(self, device):
         """
@@ -690,7 +713,7 @@ class Graph_DDPM_net_model(torch.nn.Module):
         self.time_emb_dim = time_emb_dim
 
         # Positional embedding tensor
-        self.time_embedding_tensor = sinusoidal_embedding(n_steps, time_emb_dim)
+        self.register_buffer('time_embedding_tensor', sinusoidal_embedding(n_steps, time_emb_dim))
         #
         # self.time_embed = torch.nn.Embedding(n_steps, time_emb_dim)
         # self.time_embed.weight.data = sinusoidal_embedding(n_steps, time_emb_dim)
@@ -911,7 +934,6 @@ class Graph_DDPM_net_model(torch.nn.Module):
         Puts the model on device `device`.
         """
         self.to(device)
-        self.time_embedding_tensor = self.time_embedding_tensor.to(device)
 # ------------------------------------------------------------------------------
 
 # ------------------------------------------------------------------------------
@@ -929,7 +951,7 @@ def train_graph_ddpm(
         G_batch_fixed=None,
         save_gen_epoch=0,
         save_gen_file_fmt='./gen_{:04d}.pt',
-        device=torch.device('cpu')):
+        device=None):
     """
     Trains denoising diffusion probabilistic model (ddpm) for graph node features.
     
@@ -984,24 +1006,27 @@ def train_graph_ddpm(
         (see `save_gen_epoch`), at epoch i the file will be 
         `save_gen_file_fmt.format(i)`
     
-    device : torch device, default: torch.device('cpu')
-        device on which the model is trained
-    
+    device : torch device, optional
+        device on which the model is trained;
+        by default (`None`): `default_device()` is used (MPS > CUDA > CPU)
+
     Returns
     -------
     train_loss : list, optional
-        returned if `return_loss=True`, 
+        returned if `return_loss=True`,
         loss at every epoch, list of floats of length `num_epochs`
-    
+
     valid_loss : list, optional
-        returned if `return_loss=True` and `valid_data_loader`, 
+        returned if `return_loss=True` and `valid_data_loader`,
         loss at every epoch, list of floats of length `num_epochs`
-    
+
     lr_used : list, optional
         returned if `return_lr=True`, learning rate used for conditional
-        variational autoencoder at each epoch, list of floats of length 
-        `num_epochs`,        
+        variational autoencoder at each epoch, list of floats of length
+        `num_epochs`,
     """
+    if device is None:
+        device = default_device()
     fname = 'train_ddpm'
 
     print('*** Training on', device, '***')
@@ -1164,11 +1189,11 @@ def generate_graph_node_features(
         attr='x',
         end_rescale=None,
         end_center=None,
-        generate_noise=True, 
-        sigmas=None, 
-        implicit=False, 
+        generate_noise=True,
+        sigmas=None,
+        implicit=False,
         return_intermediate=False,
-        device=torch.device('cpu')):
+        device=None):
     """
     Generates node features on graph `G`, according to DDPM (or DDIM, see `implicit` below).
         
@@ -1209,23 +1234,26 @@ def generate_graph_node_features(
         after each time step (`n_steps-1, ..., 0`) are returned in a list of length \
         `n_steps+1`
     
-    device : torch device, default: torch.device('cpu')
-        device on which the network is trained
+    device : torch device, optional
+        device on which the network is run;
+        by default (`None`): `default_device()` is used (MPS > CUDA > CPU)
 
     Returns
     -------
     G : `networkx.Graph`
         graph with attribute `attr` containing the generated node features
-    
+
     x_all : optional
         returned if `return_intermediate=True`, list of tensors of length
-        `n_steps+1`, initial node features and reconstructed node features after 
+        `n_steps+1`, initial node features and reconstructed node features after
         each time step (`n_steps-1, ..., 0`)
 
-    Notes 
+    Notes
     -----
     In place operations are done, `G` is modified.
     """
+    if device is None:
+        device = default_device()
     fname = 'generate_graph_node_features'
     if (end_rescale is None and end_center is not None) or (end_rescale is not None and end_center is None):
         raise ValueError(f'{fname}: `end_rescale` and `end_center` must be both specified')
@@ -1294,11 +1322,11 @@ def generate_list_graph_node_features(
         attr='x', 
         end_rescale=None,
         end_center=None,
-        generate_noise=True, 
-        sigmas=None, 
-        implicit=False, 
+        generate_noise=True,
+        sigmas=None,
+        implicit=False,
         return_intermediate=False,
-        device=torch.device('cpu')):
+        device=None):
     """
     Generates node features on a list of graphs, according to DDPM (or DDIM, see `implicit` below).
         
@@ -1345,23 +1373,26 @@ def generate_list_graph_node_features(
         after each time step (`n_steps-1, ..., 0`) are returned in a list of length \
         `n_steps+1`
     
-    device : torch device, default: torch.device('cpu')
-        device on which the network is trained
+    device : torch device, optional
+        device on which the network is run;
+        by default (`None`): `default_device()` is used (MPS > CUDA > CPU)
 
     Returns
     -------
     G_list : list of `networkx.Graph`
         list of graphs with attribute `attr` containing the generated node features
-    
+
     x_all : optional
         returned if `return_intermediate=True`, list of tensors of length
-        `n_steps+1`, initial node features and reconstructed node features after 
+        `n_steps+1`, initial node features and reconstructed node features after
         each time step (`n_steps-1, ..., 0`)
 
-    Notes 
+    Notes
     -----
     In place operations are done, `G` is modified.
     """
+    if device is None:
+        device = default_device()
     fname = 'generate_list_graph_node_features'
     if (end_rescale is None and end_center is not None) or (end_rescale is not None and end_center is None):
         raise ValueError(f'{fname}: `end_rescale` and `end_center` must be both specified')
@@ -1427,574 +1458,3 @@ def generate_list_graph_node_features(
     else:
         return G_list
 # ------------------------------------------------------------------------------
-
-
-###### OLD #####
-# # ------------------------------------------------------------------------------
-# def generate_graph_node_features(
-#         G, 
-#         ddpm, 
-#         attr='x',
-#         end_rescale=None,
-#         end_center=None,
-#         generate_noise=True, 
-#         sigmas=None, 
-#         implicit=False, 
-#         return_intermediate=False,
-#         device=torch.device('cpu')):
-#     """
-#     Generates node features on graph `G`, according to DDPM (or DDIM, see `implicit` below).
-        
-#     Parameters
-#     ----------
-#     G : `networkx.Graph`
-#         graph
-#     ddpm : class :class:`Graph_DDPM`
-#         ddpm model
-#     attr : str, default: 'x'
-#         name of the feature to be generated
-#     end_rescale : sequence or tensor, optional
-#         scale factor applied at the end, sequence of same
-#         length as the length of `attr`
-#     end_center : sequence or tensor, optional
-#         center of features (shifted at the end), sequence of same
-#         length as the length of `attr`
-#     sigmas : float or tensor of size (ddpm.n_steps, ), optional
-#         standard deviation of noise added at each time step of the 
-#         reconstruction (backward + sampling process); 
-#         by default (`None`): default values given by the noise schedule
-#         (square roots of betas) are used
-#     implicit : bool, default: `False`
-#         - if `True`: no noise is added during the reconstruction, `sigmas` not used
-#         - if `False`: noise is added during the reconstruction, according to `sigmas`, \
-#         except at the last step (t0)
-#     return_intermediate : bool, default: `False`
-#         - if `True`: initial node features (noise), and node features obtained \
-#         after each time step (`n_steps-1, ..., 0`) are returned in a list of length \
-#         `n_steps+1`
-#     device : torch device, default: torch.device('cpu')
-#         device on which the network is trained
-
-#     Returns
-#     -------
-#     G : `networkx.Graph`
-#         graph with attribute `attr` containing the generated node features
-#     x_all : optional
-#         returned if `return_intermediate=True`, list of tensors of length
-#         `n_steps+1`, initial node features and reconstructed node features after 
-#         each time step (`n_steps-1, ..., 0`)
-
-#     Notes 
-#     -----
-#     In place operations are done, `G` is modified.
-#     """
-#     # Convert to torch_geometric (with zeros as node features)
-#     G_geom = torch_geometric.utils.from_networkx(G)
-#     if generate_noise:
-#         G_geom.x = torch.zeros((G_geom.num_nodes, ddpm.n_node_features))
-#         # else: G_geom.x must already contain starting noise
-
-#     # Convert to batch of one graph
-#     G_batch = torch_geometric.data.Batch.from_data_list([G_geom]) # torch_geometric.data.batch.DataBatch
-
-#     # Set model on specified device
-#     ddpm.to_device(device)
-#     G_batch.to(device)
-
-#     # Generation
-#     out = ddpm.generate(
-#             G_batch,
-#             generate_noise=generate_noise, 
-#             sigmas=sigmas, 
-#             implicit=implicit, 
-#             return_intermediate=return_intermediate)
-
-#     if return_intermediate:
-#         G_batch, x_all = out
-#         if x_all[0].device != torch.device('cpu'):
-#             x_all = [x.to('cpu') for x in x_all]
-#     else:
-#         G_batch = out
-
-#     if end_rescale is not None:
-#         if isinstance(end_rescale, list):
-#             end_rescale = np.asarray(end_rescale)
-#         if isinstance(end_rescale, np.ndarray):
-#             end_rescale = torch.from_numpy(end_rescale).to(torch.float)
-#         G_batch.x = end_rescale * G_batch.x.to('cpu')
-#         if return_intermediate:
-#             x_all = [end_rescale*x for x in x_all]
-
-#     if end_center is not None:
-#         if isinstance(end_center, list):
-#             end_center = np.asarray(end_center)
-#         if isinstance(end_center, np.ndarray):
-#             end_center = torch.from_numpy(end_center).to(torch.float)
-#         G_batch.x = end_center + G_batch.x.to('cpu') - torch.mean(G_batch.x.to('cpu'), dim=0)
-#         if return_intermediate:
-#             x_all = [end_center + x - torch.mean(x, dim=0) for x in x_all]
-
-#     # G_geom.x = G_batch.x.to('cpu')
-#     # G = torch_geometric.utils.to_networkx(G_geom, to_undirected=True, node_attrs=['x'])
-#     # if attr != 'x':
-#     #     rename_node_attribute(G, 'x', attr)
-    
-#     node_features_dict = {i: xi.tolist() for i, xi in enumerate(G_batch.x.to('cpu').numpy())}
-#     networkx.set_node_attributes(G, node_features_dict, attr)
-
-#     ddpm.to_device('cpu')
-
-#     if return_intermediate:
-#         return G, x_all
-#     else:
-#         return G
-# # ------------------------------------------------------------------------------
-
-# # ------------------------------------------------------------------------------
-# def generate_list_graph_node_features(
-#         G_list, 
-#         ddpm, 
-#         attr='x', 
-#         end_rescale=None,
-#         end_center=None,
-#         generate_noise=True, 
-#         sigmas=None, 
-#         implicit=False, 
-#         return_intermediate=False,
-#         device=torch.device('cpu')):
-#     """
-#     Generates node features on a list of graphs, according to DDPM (or DDIM, see `implicit` below).
-        
-#     Parameters
-#     ----------
-#     G_list : list of `networkx.Graph`
-#         list of graphs
-#     ddpm : class :class:`Graph_DDPM`
-#         ddpm model
-#     attr : str, default: 'x'
-#         name of the feature to be generated
-#     end_rescale : sequence or tensor, optional
-#         scale factor applied at the end, sequence of same
-#         length as the length of `attr`
-#     end_center : sequence or tensor, optional
-#         center of features (shifted at the end, separately for each graph), 
-#         sequence of same length as the length of `attr`
-#     sigmas : float or tensor of size (ddpm.n_steps, ), optional
-#         standard deviation of noise added at each time step of the 
-#         reconstruction (backward + sampling process); 
-#         by default (`None`): default values given by the noise schedule
-#         (square roots of betas) are used
-#     implicit : bool, default: `False`
-#         - if `True`: no noise is added during the reconstruction, `sigmas` not used
-#         - if `False`: noise is added during the reconstruction, according to `sigmas`, \
-#         except at the last step (t0)
-#     return_intermediate : bool, default: `False`
-#         - if `True`: initial node features (noise), and node features obtained \
-#         after each time step (`n_steps-1, ..., 0`) are returned in a list of length \
-#         `n_steps+1`
-#     device : torch device, default: torch.device('cpu')
-#         device on which the network is trained
-
-#     Returns
-#     -------
-#     G_list : list of `networkx.Graph`
-#         list of graphs with attribute `attr` containing the generated node features
-#     x_all : optional
-#         returned if `return_intermediate=True`, list of tensors of length
-#         `n_steps+1`, initial node features and reconstructed node features after 
-#         each time step (`n_steps-1, ..., 0`)
-
-#     Notes 
-#     -----
-#     In place operations are done, `G` is modified.
-#     """
-#     # Convert to torch_geometric (with zeros as node features)
-#     G_geom_list = [torch_geometric.utils.from_networkx(G) for G in G_list]
-
-#     # Convert to batch of one graph
-#     G_batch = torch_geometric.data.Batch.from_data_list(G_geom_list) # torch_geometric.data.batch.DataBatch
-#     if generate_noise:
-#         G_batch.x = torch.zeros((G_batch.num_nodes, ddpm.n_node_features))
-#         # else: G_batch.x must already contain starting noise
-
-#     # Set model on specified device
-#     ddpm.to_device(device)
-#     G_batch.to(device)
-
-#     # Generation
-#     out = ddpm.generate(
-#             G_batch,
-#             generate_noise=generate_noise, 
-#             sigmas=sigmas, 
-#             implicit=implicit, 
-#             return_intermediate=return_intermediate)
-
-#     if return_intermediate:
-#         G_batch, x_all = out
-#         if x_all[0].device != torch.device('cpu'):
-#             x_all = [x.to('cpu') for x in x_all]
-#     else:
-#         G_batch = out
-
-#     if end_rescale is not None:
-#         if isinstance(end_rescale, list):
-#             end_rescale = np.asarray(end_rescale)
-#         if isinstance(end_rescale, np.ndarray):
-#             end_rescale = torch.from_numpy(end_rescale).to(torch.float)
-#         G_batch.x = end_rescale * G_batch.x.to('cpu')
-#         if return_intermediate:
-#             x_all = [end_rescale*x for x in x_all]
-
-#     if end_center is not None:
-#         if isinstance(end_center, list):
-#             end_center = np.asarray(end_center)
-#         if isinstance(end_center, np.ndarray):
-#             end_center = torch.from_numpy(end_center).to(torch.float)
-#         G_batch.x = G_batch.x.to('cpu')
-#         for k in range(len(G_list)):
-#             G_batch.x[G_batch.ptr[k]:G_batch.ptr[k+1]] = end_center + G_batch.x[G_batch.ptr[k]:G_batch.ptr[k+1]] - torch.mean(G_batch.x[G_batch.ptr[k]:G_batch.ptr[k+1]], dim=0)
-#         if return_intermediate:
-#             for j in range(len(x_all)):
-#                 for k in range(len(G_list)):
-#                     x_all[j][k] = end_center + x_all[j][k] - torch.mean(x_all[j][k], dim=0)
-
-#     for k in range(len(G_list)):
-#         node_features_dict = {i: xi.tolist() for i, xi in enumerate(G_batch.x[G_batch.ptr[k]:G_batch.ptr[k+1], :].to('cpu').numpy())}
-#         networkx.set_node_attributes(G_list[k], node_features_dict, attr)
-
-#     ddpm.to_device('cpu')
-
-#     if return_intermediate:
-#         return G_list, x_all
-#     else:
-#         return G_list
-# # ------------------------------------------------------------------------------
-
-# # ------------------------------------------------------------------------------
-# class Graph_DDPM_net_model(torch.nn.Module):
-#     def __init__(self, 
-#                  n_node_features, 
-#                  nf_list, 
-#                  nf_last,
-#                  has_mid=False,
-#                  activation=torch.nn.SiLU(),
-#                  te_activation=torch.nn.SiLU(),
-#                  n_steps=1000, 
-#                  time_emb_dim=100):
-#         """
-#         Network to be used with DDPM.
-
-#         Parameters
-#         ----------
-#         n_node_features: int
-#             number of node features
-#         nf_list : list of ints
-#             number of node features at downwards steps (U-net style)
-#         nf_last : int 
-#             number of node features before last operation (last upwards steps)
-#         has_mid : bool, default: `False`
-#             if `True`, a "mid" layer is considered at the end of the downwards steps,
-#             consisting in a linear layer with dimension at input and output equal
-#             to nf_list[-1]
-#         activation : torch activation module, default: torch.nn.SiLU()
-#             activation module used (except for time embedding and at output)
-#         te_activation : torch activation module, default: torch.nn.SiLU()
-#             activation module for time embedding module
-#         n_steps : int, default: 1000
-#             number of time steps (for time embedding)
-#         time_embed_dim : int, default: 100
-#             dimension of time embedding        
-#         """
-#         super().__init__()
-
-#         self.n_node_features = n_node_features
-#         self.nf_list = nf_list
-#         self.nf_last = nf_last
-#         self.nf_len = len(nf_list)
-
-#         self.n_steps = n_steps
-#         self.time_emb_dim = time_emb_dim
-
-#         # Positional embedding tensor
-#         self.time_embedding_tensor = sinusoidal_embedding(n_steps, time_emb_dim)
-#         #
-#         # self.time_embed = torch.nn.Embedding(n_steps, time_emb_dim)
-#         # self.time_embed.weight.data = sinusoidal_embedding(n_steps, time_emb_dim)
-#         # self.time_embed.requires_grad_(False)
-#         # # Note: avoid using torch.nn.Embedding with fixed weights time_embed.weight.data (as in the 3 lines above)
-#         # # because these weights could be resetted when resetting / re-initializing weight of the module!
-
-#         # U-net style
-#         # - downwards
-#         nf_down = [self.n_node_features] + self.nf_list
-#         te_down = []
-#         laynorm_down = []
-#         layop_down = []
-#         for nf_a, nf_b in zip(nf_down[:-1], nf_down[1:]):
-#             te_down.append(self.time_embed_module(time_emb_dim, nf_a, activation=te_activation))
-#             laynorm_down.append(torch_geometric.nn.norm.LayerNorm(nf_a))
-#             # layop_down.append(torch_geometric.nn.GCNConv(nf_a, nf_b))
-#             layop_down.append(torch_geometric.nn.SAGEConv(nf_a, nf_b))
-#             # layop_down.append(torch_geometric.nn.GraphConv(nf_a, nf_b))
-#         self.te_down      = torch.nn.ModuleList(te_down)
-#         self.laynorm_down = torch.nn.ModuleList(laynorm_down)
-#         self.layop_down   = torch.nn.ModuleList(layop_down)
-
-#         # - middle
-#         self.has_mid = has_mid
-#         if self.has_mid:
-#             self.te_mid = self.time_embed_module(time_emb_dim, nf_down[-1], activation=te_activation)
-#             self.laynorm_mid = torch_geometric.nn.norm.LayerNorm(nf_down[-1])
-#             self.lin_mid = torch.nn.Linear(nf_down[-1], nf_down[-1])
-
-#         # - upwards
-#         nf_up = self.nf_list[::-1] + [nf_last]
-#         te_up = []
-#         laynorm_up = []
-#         layop_up = []
-#         for i, (nf_a, nf_b) in enumerate(zip(nf_up[:-1], nf_up[1:])):
-#             if i > 0:
-#                 nf_a = 2*nf_a
-#             te_up.append(self.time_embed_module(time_emb_dim, nf_a, activation=te_activation))
-#             laynorm_up.append(torch_geometric.nn.norm.LayerNorm(nf_a))
-#             # layop_up.append(torch_geometric.nn.GCNConv(nf_a, nf_b))
-#             # layop_up.append(torch_geometric.nn.SAGEConv(nf_a, nf_b))
-#             layop_up.append(torch_geometric.nn.GraphConv(nf_a, nf_b))
-#             # layop_up.append(torch_geometric.nn.ResGatedGraphConv(nf_a, nf_b))
-#             # layop_up.append(torch_geometric.nn.GATConv(nf_a, nf_b))
-#         self.te_up      = torch.nn.ModuleList(te_up)
-#         self.laynorm_up = torch.nn.ModuleList(laynorm_up)
-#         self.layop_up   = torch.nn.ModuleList(layop_up)
-
-#         # - last
-#         self.laynorm_last = torch_geometric.nn.norm.LayerNorm(nf_last)
-#         self.lin_last = torch.nn.Linear(nf_last, self.n_node_features)
-
-#         # activation
-#         self.activation = activation
-#         # self.te_activation = te_activation
-
-#         self.init_weights()
-
-#     def forward(self, x, edge_index, t):
-#         #
-#         # x ---> down[0] - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - > (cat)   up[nf_len-2] ---> up[nf_len-1] -----> last
-#         #          |                                                                               ^                              (lin)
-#         #          |                                                                               |    
-#         #          +---> down[1] - - - - - - - - - - - - - - - - - - - - > (cat)   up[nf_len-3] ---+
-#         #                ...                                                       ^    
-#         #                  |                                                       |
-#         #                  |                                                       |    
-#         #                  +---> down[nf_len-2]  - - - - - - > (cat)   up[0]... ---+    
-#         #                          |                                   ^    
-#         #                          |                                   |    
-#         #                          +---> down[nf_len-1] ------> mid ---+    
-#         #                                               (lin)
-        
-#         # Positional embedding
-#         t = torch.matmul(torch.nn.functional.one_hot(t, num_classes=self.n_steps).to(torch.float), self.time_embedding_tensor)
-#         #
-#         # t = self.time_embed(t)
-#         # # Note: avoid a module to do that (see Note in the __init__)
-
-#         out = x
-#         # print('...start...', out[-1].size())
-
-#         out_down = []
-#         for i, (te, laynorm, layop) in enumerate(zip(self.te_down, self.laynorm_down, self.layop_down)):
-#             out = out + te(t)
-#             out = laynorm(out)
-#             out = layop(out, edge_index)
-#             out = self.activation(out)
-#             if i < self.nf_len - 1:
-#                 out_down.append(out)
-#                 # i.e. do not store the last one
-#             # print('...down...', i, out.size())
-            
-#         if self.has_mid:
-#             out = out + self.te_mid(t)
-#             out = self.laynorm_mid(out)
-#             out = self.lin_mid(out)
-#             out = self.activation(out)
-#             # print('...mid...', out.size())
-
-#         for i, (te, laynorm, layop) in enumerate(zip(self.te_up, self.laynorm_up, self.layop_up)):
-#             out = out + te(t)
-#             out = laynorm(out)
-#             out = layop(out, edge_index)
-#             out = self.activation(out)
-#             if i < self.nf_len - 1:
-#                 out = torch.cat((out_down[-i-1], out), dim=1)
-#             # print('...up...', i, out.size())
-
-#         out = self.laynorm_last(out)
-#         out = self.lin_last(out)
-#         # print('...last...', i, out.size())
-        
-#         return out
-
-#     def time_embed_module(self, dim_in, dim_out, activation=torch.nn.SiLU()):
-#         return torch.nn.Sequential(
-#             torch.nn.Linear(dim_in, dim_out),
-#             activation, #torch.nn.SiLU(),
-#             torch.nn.Linear(dim_out, dim_out)
-#         )
-
-#     def init_weights(self, seed=None):
-#         """Initializes weights of the network."""
-#         if seed is not None:
-#             torch.random.manual_seed(seed)
-
-#         for name, param in self.named_parameters():
-#             # print('...', name)
-#             if 'bias' in name:
-#                 torch.nn.init.constant_(param, 0.0)
-#             elif 'weight' in name:
-#                 if param.ndim == 1:
-#                     # layerNorm
-#                     torch.nn.init.constant_(param, 1.0) 
-#                 else:
-#                     torch.nn.init.xavier_uniform_(param, gain=1.0)
-#                                                     # gain=nn.init.calculate_gain('sigmoid')
-#                                                     # gain=nn.init.calculate_gain('relu')
-#                                                     # ...
-
-#     def to_device(self, device):
-#         """
-#         Puts the model on device `device`.
-#         """
-#         self.to(device)
-#         self.time_embedding_tensor = self.time_embedding_tensor.to(device)
-# # ------------------------------------------------------------------------------
-
-# # ------------------------------------------------------------------------------
-# class Graph_DDPM_net_model(torch.nn.Module):
-#     def __init__(self, n_node_features, nf_list=[20, 40, 80, 160, 10], n_steps=1000, time_emb_dim=100):
-#         """
-#         Network to be used with DDPM.
-
-#         Parameters
-#         ----------
-#         n_node_features: int
-#             number of node features
-#         nf_list : list of 5 ints, default: [20, 40, 80, 160, 10]
-#             number of node features at first steps and last step of the net (see code)
-#         n_steps : int, default: 1000
-#             number of time steps (for time embedding)
-#         time_embed_dim : int, default: 100
-#             dimension of time embedding        
-#         """
-#         super().__init__()
-
-#         self.n_node_features = n_node_features
-#         self.nf_list = nf_list
-
-#         nf1, nf2, nf3, nfm, nflast = self.nf_list
-
-#         # Positional embedding
-#         self.time_embed = torch.nn.Embedding(n_steps, time_emb_dim)
-#         self.time_embed.weight.data = sinusoidal_embedding(n_steps, time_emb_dim)
-#         self.time_embed.requires_grad_(False)
-
-#         # U-net style (test)
-#         self.te1 = self.time_embed_module(time_emb_dim, self.n_node_features)
-#         self.laynorm1 = torch_geometric.nn.norm.LayerNorm(self.n_node_features)
-#         self.conv1 = torch_geometric.nn.SAGEConv(self.n_node_features, nf1)
-
-#         self.te2 = self.time_embed_module(time_emb_dim, nf1)
-#         self.laynorm2 = torch_geometric.nn.norm.LayerNorm(nf1)
-#         self.conv2 = torch_geometric.nn.SAGEConv(nf1, nf2)
-
-#         self.te3 = self.time_embed_module(time_emb_dim, nf2)
-#         self.laynorm3 = torch_geometric.nn.norm.LayerNorm(nf2)
-#         self.conv3 = torch_geometric.nn.SAGEConv(nf2, nf3)
-
-#         self.tem = self.time_embed_module(time_emb_dim, nf3)
-#         self.laynormm = torch_geometric.nn.norm.LayerNorm(nf3)
-#         self.convm = torch_geometric.nn.SAGEConv(nf3, nfm)
-
-#         self.te4 = self.time_embed_module(time_emb_dim, nfm)
-#         self.laynorm4 = torch_geometric.nn.norm.LayerNorm(nfm)
-#         self.conv4 = torch_geometric.nn.GCNConv(nfm, nf3)
-
-#         self.te5 = self.time_embed_module(time_emb_dim, 2*nf3)
-#         self.laynorm5 = torch_geometric.nn.norm.LayerNorm(2*nf3)
-#         self.conv5 = torch_geometric.nn.GCNConv(2*nf3, nf2)
-
-#         self.te6 = self.time_embed_module(time_emb_dim, 2*nf2)
-#         self.laynorm6 = torch_geometric.nn.norm.LayerNorm(2*nf2)
-#         self.conv6 = torch_geometric.nn.GCNConv(2*nf2, nf1)
-
-#         self.telast = self.time_embed_module(time_emb_dim, 2*nf1)
-#         # self.laynormlast = torch_geometric.nn.norm.LayerNorm(2*nf1)
-#         self.convlast = torch_geometric.nn.GCNConv(2*nf1, nflast)
-
-#         self.lin_f = torch.nn.Linear(nflast, self.n_node_features)
-
-#         self.act = torch.nn.SiLU()
-
-#     def forward(self, x, edge_index, t):
-#         t = self.time_embed(t)
-
-#         # print('x', x.size())
-#         out1 = x + self.te1(t)
-#         out1 = self.laynorm1(out1)
-#         out1 = self.conv1(out1, edge_index)
-#         out1 = self.act(out1)
-#         # print('out1', out1.size())
-        
-#         out2 = out1 + self.te2(t)
-#         out2 = self.laynorm2(out2)
-#         out2 = self.conv2(out2, edge_index)
-#         out2 = self.act(out2)
-#         # print('out2', out2.size())
-
-#         out3 = out2 + self.te3(t)
-#         out3 = self.laynorm3(out3)
-#         out3 = self.conv3(out3, edge_index)
-#         out3 = self.act(out3)
-#         # print('out3', out3.size())
-
-#         outm = out3 + self.tem(t)
-#         outm = self.laynormm(outm)
-#         outm = self.convm(outm, edge_index)
-#         outm = self.act(outm)
-#         # print('outm', outm.size())
-
-#         out4 = outm + self.te4(t)
-#         out4 = self.laynorm4(out4)
-#         out4 = self.conv4(out4, edge_index)
-#         out4 = self.act(out4)
-#         out4 = torch.cat((out3, out4), dim=1)
-#         # print('out4', out4.size())
-
-#         out5 = out4 + self.te5(t)
-#         out5 = self.laynorm5(out5)
-#         out5 = self.conv5(out5, edge_index)
-#         out5 = self.act(out5)
-#         out5 = torch.cat((out2, out5), dim=1)
-#         # print('out5', out5.size())
-
-#         out6 = out5 + self.te6(t)
-#         out6 = self.laynorm6(out6)
-#         out6 = self.conv6(out6, edge_index)
-#         out6 = self.act(out6)
-#         out6 = torch.cat((out1, out6), dim=1)
-#         # print('out6', out6.size())
-
-#         outlast = out6 + self.telast(t)
-#         # outlast = self.laynormlast(outlast)
-#         outlast = self.convlast(outlast, edge_index)
-#         outlast = self.act(outlast)
-#         # print('outlast', outlast.size())
-#         out = self.lin_f(outlast)
-        
-#         return out
-
-#     def time_embed_module(self, dim_in, dim_out):
-#         return torch.nn.Sequential(
-#             torch.nn.Linear(dim_in, dim_out),
-#             torch.nn.SiLU(),
-#             torch.nn.Linear(dim_out, dim_out)
-#         )
-# # ------------------------------------------------------------------------------

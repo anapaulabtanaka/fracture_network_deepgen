@@ -1,4 +1,4 @@
-{'input_size': 55,
+{'input_size': 45,
  'embed_input': True,
  'embed_input_size': 64,
  'hidden_size': 48,
