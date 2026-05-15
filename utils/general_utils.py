@@ -19,7 +19,7 @@ Miscalleneous tools.
 
 import numpy as np
 import scipy
-
+import torch
 # -----------------------------------------------------------------------------
 def multidimensional_scaling(dmat, dim=None):
     """
@@ -157,3 +157,20 @@ def nw_kernel_estimate(tx, x, y, bw=None, extrapolate=False):
 
     return ty
 # ----------------------------------------------------------------------------
+
+def default_device():
+# Autoset device to MPS (Apple Silicon) if available, 
+# otherwise to CUDA (NVIDIA GPU) if available, 
+# otherwise to CPU
+
+    if torch.backends.mps.is_available():
+        #print("mps")
+        device = torch.device("mps")
+    elif torch.cuda.is_available():
+        #print("cuda")
+        device = torch.device("cuda")
+    else:
+        #print("cpu")
+        device = torch.device("cpu")
+
+    return device

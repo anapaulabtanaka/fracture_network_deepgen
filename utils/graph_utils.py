@@ -822,6 +822,70 @@ def get_bfs_sequence(G, start_id, depth_limit=None):
 # -----------------------------------------------------------------------------
 
 # -----------------------------------------------------------------------------
+def get_spatial_bfs_sequence(G, node_positions, start_id=None, n_start_candidates=1):
+    """
+    Get BFS sequence starting from a spatially central node, with neighbors
+    within each BFS frontier sorted by distance from the start node.
+
+    This reduces adjacency-matrix bandwidth compared to plain BFS from a random
+    node: spatially close nodes end up sequentially adjacent, so the RNN
+    lookback window captures more true connectivity.
+
+    Parameters
+    ----------
+    G : networkx.Graph
+        graph (nodes must be labelled 0 ... n-1)
+
+    node_positions : array-like of shape (n_nodes, n_dim)
+        spatial coordinates of each node
+
+    start_id : int, optional
+        BFS start node; if None, the start node is chosen from the
+        `n_start_candidates` nodes closest to the geometric centroid
+
+    n_start_candidates : int, default: 1
+        number of candidate start nodes (the closest nodes to the centroid)
+        from which one is chosen at random when `start_id` is None;
+        set to 1 for fully deterministic behaviour, or increase (e.g. 5-20)
+        to introduce stochasticity while keeping the start near the centre
+
+    Returns
+    -------
+    bfs_seq : 1d-array of int
+        BFS sequence of node ids
+    """
+    pos = np.asarray(node_positions)
+
+    if start_id is None:
+        centroid = np.mean(pos, axis=0)
+        dists_to_centroid = np.linalg.norm(pos - centroid, axis=1)
+        k = min(n_start_candidates, len(dists_to_centroid))
+        candidates = np.argpartition(dists_to_centroid, k - 1)[:k]
+        start_id = int(np.random.choice(candidates))
+
+    n = G.number_of_nodes()
+    id_flag = np.ones(n, dtype='bool')
+    bfs_seq = [start_id]
+    id_flag[start_id] = False
+
+    ids_to_treat = [start_id]
+    while len(ids_to_treat) > 0:
+        next_ids = np.array([], dtype='int')
+        for nid in ids_to_treat:
+            neighbors_id = np.asarray(list(G.edges(nid)))[:, 1]
+            neighbors_id = neighbors_id[id_flag[neighbors_id]]
+            id_flag[neighbors_id] = False
+            next_ids = np.hstack((next_ids, neighbors_id))
+        if len(next_ids) > 1:
+            dists = np.linalg.norm(pos[next_ids] - pos[start_id], axis=1)
+            next_ids = next_ids[np.argsort(dists)]
+        bfs_seq = np.hstack((bfs_seq, next_ids))
+        ids_to_treat = next_ids
+
+    return bfs_seq.astype(int)
+# -----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
 def csr_array_bw(S):
     """
     Computes the bandwidth of a matrix in csr (compressed-sparse-row) format.
@@ -914,12 +978,12 @@ def adj_mat_bw(G, seq=None):
 # Utils for extracting graph
 # =============================================================================
 # -----------------------------------------------------------------------------
-def extract_subgraph_from_bfs(G, n_nodes, start_id=0, randomize_nodes=True, seed=None):
+def extract_subgraph_from_bfs(G, n_nodes, start_id=0, randomize_nodes=True, seed=None, pos_attr=None, n_start_candidates=1):
     """
     Extracts a subgraph.
 
     Starting from the input graph `G` (with integers starting from 0 as node numbering):
-    
+
     - its nodes are randomized (if `randomize_nodes=True`)
     - the BFS (breadth-first-search) sequence is computed from the start \
     node id `start_id`
@@ -929,18 +993,31 @@ def extract_subgraph_from_bfs(G, n_nodes, start_id=0, randomize_nodes=True, seed
     ----------
     G : `networkx.Graph`
         graph
-    
+
     n_nodes : int
         number of nodes to be extracted
-    
+
     start_id : int, default: 0
-        starting id for the BFS sequence
-    
+        starting id for the BFS sequence; ignored when `pos_attr` is given
+        (the spatially central node is used instead)
+
     randomize_nodes : bool, default: `True`
         if `True`: nodes (numbering) of `G` are first randomized
-    
+
     seed : int, optional
         seed number (used if `randomize_nodes=True`)
+
+    pos_attr : str, optional
+        name of the node attribute holding spatial coordinates (e.g. `'pos'`);
+        if provided, `get_spatial_bfs_sequence` is used so that BFS starts from
+        a spatially central node and frontier nodes are sorted by distance,
+        reducing adjacency-matrix bandwidth and improving RNN training quality
+
+    n_start_candidates : int, default: 1
+        passed to `get_spatial_bfs_sequence` when `pos_attr` is given;
+        number of candidate start nodes (closest to the centroid) from which
+        one is chosen at random — increase (e.g. 5-20) to vary which central
+        region is extracted across repeated calls
     """
     attr_key_list = G.nodes[0].keys()
     attr_list = [np.array(list(networkx.get_node_attributes(G, attr_key).values())) for attr_key in attr_key_list]
@@ -950,17 +1027,20 @@ def extract_subgraph_from_bfs(G, n_nodes, start_id=0, randomize_nodes=True, seed
     if randomize_nodes:
         if seed is not None:
             np.random.seed(seed)
-            # torch.random.manual_seed(seed)
         seq = np.random.permutation(G_out.number_of_nodes())
-        # seq = torch.randperm(G.number_of_nodes()).numpy()
         adj_mat_csr = networkx.adjacency_matrix(G_out, seq)
         G_out = networkx.from_scipy_sparse_array(adj_mat_csr)
         attr_list = [attr[seq] for attr in attr_list]
-        
-    seq = get_bfs_sequence(G_out, start_id)
+
+    if pos_attr is not None and pos_attr in attr_key_list:
+        pos_idx = list(attr_key_list).index(pos_attr)
+        seq = get_spatial_bfs_sequence(G_out, attr_list[pos_idx], n_start_candidates=n_start_candidates)
+    else:
+        seq = get_bfs_sequence(G_out, start_id)
+
     adj_mat_csr = networkx.adjacency_matrix(G_out, seq)
     G_out = networkx.from_scipy_sparse_array(adj_mat_csr)
-    
+
     nn = min(G_out.number_of_nodes(), n_nodes)
     G_out = G_out.subgraph(np.arange(nn)).copy()
 

@@ -1,6 +1,3 @@
-Model Changes — Session Summary
-=================================
-Date: 2026-04-30
 Project: fracture_network_deepgen
 
 
@@ -96,21 +93,7 @@ always use spatial BFS (node positions are always available in this class):
      this sequence.
 
 
-4. gen_Tsanfleuron_2/graph_ddpm_summary.txt  (new file)
----------------------------------------------------------
-
-Created a plain-text model assessment of graph_ddpm.py covering:
-   - What the model is and its references (Ho et al. 2020, Lin et al. 2024)
-   - Architecture overview (Graph_DDPM wrapper, Graph_DDPM_net_model U-Net)
-   - Sampling algorithm (DDIM-style hybrid)
-   - Six identified issues (eta_ddim hardcoding, silently ignored parameters,
-     potential NaN at t=0, time_embedding_tensor not a buffer, asymmetric
-     learn_noise modes, commented-out code)
-   - Strengths of the current implementation
-   - Summary of most actionable fixes
-
-
-5. gen_Tsanfleuron_2/graph_ddpm.py  (continued — device selection)
+4. gen_Tsanfleuron_2/graph_ddpm.py  (continued — device selection)
 -------------------------------------------------------------------
 
 c) Replaced hardcoded device=torch.device('cpu') defaults with automatic
@@ -141,7 +124,7 @@ c) Replaced hardcoded device=torch.device('cpu') defaults with automatic
            by default (None): default_device() is used (MPS > CUDA > CPU)
 
 
-6. utils/general_utils.py
+5. utils/general_utils.py
 --------------------------
 
 Added new function default_device():
@@ -158,7 +141,7 @@ Added new function default_device():
            return torch.device('cpu')
 
 
-7. gen_Tsanfleuron_2/graph_ddpm.py  (continued — DDIM numerical stability fix)
+6. gen_Tsanfleuron_2/graph_ddpm.py  (continued — DDIM numerical stability fix)
 -------------------------------------------------------------------------------
 
 Fixed catastrophic float32 cancellation in reconstruct() that caused the reverse
@@ -203,12 +186,246 @@ pure algebraic rearrangement. Results will differ numerically (because the
 previous float32 precision loss is now avoided), which is the intended effect.
 
 
+7. utils/graph_rnn.py  (GraphRNN edge density control)
+-------------------------------------------------------
+
+Added `threshold` parameter to generate_graph() and generate_graph_min_n_nodes()
+to address the problem of generated graphs having too many edges (degree/variance
+too large compared to training data).
+
+Root cause: Bernoulli sampling with predicted probabilities always generates an
+edge whenever p > 0 — even low-confidence predictions (~0.1-0.3) occasionally
+fire, systematically inflating edge count across the many lookback positions in
+the BFS window.
+
+Fix: gate each Bernoulli draw so that edges are only sampled when the predicted
+probability meets or exceeds a threshold. Below the threshold the probability
+is zeroed, making that edge impossible.
+
+   Old (always samples from full predicted probability):
+       x_E = torch.lt(torch.rand(y_E_hat.size(), device=device), y_E_hat).to(torch.float)
+
+   New (zeros out probabilities below threshold before sampling):
+       x_E = torch.lt(torch.rand(y_E_hat.size(), device=device),
+                      y_E_hat * (y_E_hat >= threshold).to(torch.float)).to(torch.float)
+
+generate_graph() signature updated:
+    def generate_graph(rnn_G, rnn_E, max_n_nodes, n_graph=1,
+                       force_node1=True, return_encoded=False,
+                       threshold=0.5, device=None)
+
+generate_graph_min_n_nodes() signature updated:
+    def generate_graph_min_n_nodes(rnn_G, rnn_E, min_n_nodes, max_n_nodes,
+                                   n_graph=1, force_node1=True,
+                                   return_encoded=False, threshold=0.5,
+                                   device=None)
+   threshold is forwarded to both internal generate_graph() calls.
+
+Both functions also changed from device=torch.device('cpu') to device=None
+with if device is None: device = default_device() resolution, consistent with
+the same change made to graph_ddpm.py functions.
+
+A module-level default_device() definition was added at the top of
+graph_rnn.py (same standalone-fallback pattern as graph_ddpm.py).
+
+Notebook call sites updated:
+   - gen_Tsanfleuron_2/01_graphRNN_model_train.py: threshold=0.5 variable
+     added before generate_graph() call, passed as argument
+   - gen_Tsanfleuron_2/05_gen_graph.py: threshold=0.5 variable added before
+     generate_graph_min_n_nodes() call, passed as argument
+
+Usage: increase threshold above 0.5 (e.g. 0.6-0.8) to reduce edge density
+when generated graphs have too many edges. Default 0.5 preserves prior behavior.
+
+
+8. utils/graph_utils.py  (spatial BFS stochasticity)
+-----------------------------------------------------
+
+Added `n_start_candidates` parameter to get_spatial_bfs_sequence() to fix
+the problem that spatial BFS was fully deterministic — always anchoring to
+the single node closest to the geometric centroid, causing repeated calls
+on the same graph to extract the same spatial patch.
+
+Root cause: get_spatial_bfs_sequence() used np.argmin to pick one fixed
+start node, so despite the random node permutation in extract_subgraph_from_bfs,
+the BFS always started from the same physical region of G_main.
+
+Fix: instead of always picking the single closest node to the centroid,
+randomly select one from the n_start_candidates closest candidates.
+
+   Old (fully deterministic):
+       start_id = int(np.argmin(np.linalg.norm(pos - centroid, axis=1)))
+
+   New (random choice from top-k candidates):
+       dists_to_centroid = np.linalg.norm(pos - centroid, axis=1)
+       k = min(n_start_candidates, len(dists_to_centroid))
+       candidates = np.argpartition(dists_to_centroid, k - 1)[:k]
+       start_id = int(np.random.choice(candidates))
+
+get_spatial_bfs_sequence() signature updated:
+    def get_spatial_bfs_sequence(G, node_positions, start_id=None,
+                                 n_start_candidates=1)
+   Default n_start_candidates=1 preserves prior deterministic behavior.
+
+extract_subgraph_from_bfs() signature updated:
+    def extract_subgraph_from_bfs(G, n_nodes, start_id=0,
+                                  randomize_nodes=True, seed=None,
+                                  pos_attr=None, n_start_candidates=1)
+   n_start_candidates is forwarded to get_spatial_bfs_sequence() when
+   pos_attr is provided.
+
+Notebook call sites updated:
+   - gen_Tsanfleuron_2/00_graphData_collection.py: both data set and test set
+     calls updated to pass pos_attr='pos', n_start_candidates=10:
+       G_list_data_set = [extract_subgraph_from_bfs(G_main, n,
+                              pos_attr='pos', n_start_candidates=10)
+                          for n in n_nodes]
+       G_list_test_set = [extract_subgraph_from_bfs(G_main, n,
+                              pos_attr='pos', n_start_candidates=10)
+                          for n in n_nodes]
+
+Usage: n_start_candidates=10 means the BFS start is randomly chosen from
+the 10 nodes closest to the centroid, giving spatial variety while keeping
+subgraphs near the geographic center of G_main. Increase for more spread.
+
+
+9. gen_Tsanfleuron_2/01_graphRNN_model_train.py  (enable spatial BFS in training)
+-----------------------------------------------------------------------------------
+
+Added pos_attr='pos' to the Graph_sequence_sampler_data_set call so that
+the RNN training dataset uses spatial BFS ordering when encoding adjacency
+matrices. This reduces bandwidth so the RNN's lookback window captures more
+true spatial connectivity.
+
+   Old:
+       data_set = Graph_sequence_sampler_data_set(
+           G_list, G_nsample, use_bfs=use_bfs, ...)
+
+   New:
+       pos_attr = 'pos'
+       data_set = Graph_sequence_sampler_data_set(
+           G_list, G_nsample, use_bfs=use_bfs, pos_attr=pos_attr, ...)
+
+
+10. utils/graph_rnn.py  (patience / early stopping)
+-----------------------------------------------------
+
+Added early stopping with patience to train_rnn_model_graph_gen().
+
+New parameters:
+   patience  : int, optional — number of epochs with no improvement before
+               stopping early; None (default) disables early stopping
+   min_delta : float, default 1e-5 — minimum loss decrease that counts as
+               an improvement
+
+Logic: after each epoch's loss is recorded, if loss improved by more than
+min_delta the patience counter resets; otherwise it increments. When the
+counter reaches patience, training stops and a message is printed.
+
+train_rnn_model_graph_gen() signature updated:
+    def train_rnn_model_graph_gen(rnn_G, rnn_E, data_loader,
+                                  optimizer_G, optimizer_E,
+                                  lr_scheduler_G=None, lr_scheduler_E=None,
+                                  return_lr=False, return_loss=True,
+                                  num_epochs=10, print_epoch=1,
+                                  patience=None, min_delta=1e-5,
+                                  device=torch.device('cpu'))
+
+Notebook call site updated:
+   - gen_Tsanfleuron_2/01_graphRNN_model_train.py: patience=50 and
+     min_delta=1e-5 variables added before train_rnn_model_graph_gen() call
+     and passed as arguments. Set patience=None to disable.
+
+
+11. utils/graph_rnn.py  (threshold revert)
+------------------------------------------
+
+Reverted all threshold-related changes from generate_graph() and
+generate_graph_min_n_nodes() (originally section 7).
+
+Reason: the threshold parameter interfered with the EOS (End Of Sequence)
+mechanism. The model was trained with plain Bernoulli sampling; many of its
+predictions sit between 0.1-0.5 ("possible but not certain"). Hard-zeroing
+those made EOS fire unpredictably at any step, causing generated node counts
+to vary wildly (e.g. 51 to 815 nodes) instead of matching the training
+distribution. The correct fix is to retrain the model — at that point a
+threshold can be reintroduced if edge density is still too high.
+
+Changes reverted:
+   - threshold=0.5 parameter removed from generate_graph() signature
+   - threshold docstring entry removed from generate_graph()
+   - Edge sampling restored to original Bernoulli form:
+       x_E = torch.lt(torch.rand(y_E_hat.size(), device=device),
+                      y_E_hat).to(torch.float)
+   - threshold=0.5 parameter removed from generate_graph_min_n_nodes()
+   - threshold=threshold forwarding removed from both internal
+     generate_graph() calls in generate_graph_min_n_nodes()
+   - threshold variable and argument removed from notebook call sites:
+     01_graphRNN_model_train.py and 05_gen_graph.py
+
+Note: device=None / default_device() changes from section 7 are kept.
+
+
+12. gen_Tsanfleuron_2/01_graphRNN_model_train.py  (misc fixes)
+---------------------------------------------------------------
+
+a) force_node1 changed from False to True in the test generate_graph() call
+   (the "Test / check : generate graph..." cell). With the threshold removed,
+   force_node1=False still risks 1-node graphs if the model is undertrained.
+   force_node1=True guarantees at least 2 nodes.
+
+b) Loss plot (zoomed log-scale) fixed to use n_epochs_trained = len(loss)
+   instead of num_epochs for both the x-axis and the loss slice. Previously
+   if early stopping fired before num_epochs was reached, the x-axis was
+   longer than the loss list, causing a ValueError.
+
+   Old:
+       nskip_beg = int(0.3*num_epochs)
+       plt.plot(np.arange(nskip_beg, num_epochs-nskip_end),
+                loss[nskip_beg:num_epochs-nskip_end], ...)
+
+   New:
+       n_epochs_trained = len(loss)
+       nskip_beg = int(0.3*n_epochs_trained)
+       plt.plot(np.arange(nskip_beg, n_epochs_trained-nskip_end),
+                loss[nskip_beg:n_epochs_trained-nskip_end], ...)
+
+
+13. gen_Tsanfleuron_2/02_graphRNN_model_play.py  (single-node plot guard)
+--------------------------------------------------------------------------
+
+Added a guard around the plt.imshow() call for the encoded adjacency matrix
+plot. When a generated graph has only 1 node, adj_seq_array has 0 rows and
+the extent has identical y-limits, triggering a matplotlib UserWarning.
+
+   Old:
+       plt.imshow(adj_seq_array, origin='upper',
+                  extent=[0.5, ..., adj_seq_array.shape[0]+0.5, 0.5], ...)
+
+   New:
+       if adj_seq_array.shape[0] > 0:
+           plt.imshow(adj_seq_array, ...)
+       else:
+           plt.text(0.5, 0.5, '(single node — no edges)', ...)
+           plt.axis('off')
+
+Also added explicit threshold=0.0 variable before generate_graph_min_n_nodes()
+call (0.0 = original Bernoulli behavior, no threshold applied).
+
+
+14. gen_Tsanfleuron_2/05_gen_graph.py  (syntax fix)
+----------------------------------------------------
+
+Fixed missing closing parenthesis on the generate_list_graph_node_features()
+call that was introduced when the threshold variable line was removed.
+
+
 Notes on backward compatibility
 ---------------------------------
 All changes use default parameter values (pos_attr=None, eta_ddim=0.3,
-device=None) that preserve existing behavior unless callers explicitly opt
-in to the new functionality. No existing training notebooks or generation
-scripts are broken by these changes.
+device=None, n_start_candidates=1, patience=None) that preserve existing
+behavior unless callers explicitly opt in. No existing training notebooks or
+generation scripts are broken by these changes.
 
 Callers that previously passed device=torch.device('cpu') explicitly will
 continue to work unchanged. Callers that relied on the CPU default and do
@@ -216,6 +433,7 @@ not pass device will now automatically use the best available device.
 
 To enable spatially-ordered BFS in training, callers should pass:
    - pos_attr='pos' to Graph_sequence_sampler_data_set (for topology-only RNN)
-   - pos_attr='pos' to extract_subgraph_from_bfs (for data collection)
+   - pos_attr='pos', n_start_candidates=10 to extract_subgraph_from_bfs
+     (for data collection, to vary which spatial region is extracted)
 The with_node_features dataset class applies spatial BFS automatically when
 use_bfs=True, since positions are always available.

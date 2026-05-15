@@ -31,6 +31,15 @@ import torch
 
 # NOTE: load graph_utils.py
 
+# Standalone fallback — overwritten when general_utils.py is exec()'d first
+def default_device():
+    if torch.backends.mps.is_available():
+        return torch.device('mps')
+    elif torch.cuda.is_available():
+        return torch.device('cuda')
+    else:
+        return torch.device('cpu')
+
 # =============================================================================
 # Base RNN model
 # =============================================================================
@@ -547,13 +556,13 @@ class Graph_sequence_sampler_data_set(object):
     reproducibility of batches delivered by the data loader (if needed)
 
     """
-    def __init__(self, G_list, G_nsample, use_bfs=True, max_n_nodes=None, max_prev_node=None, calc_max_prev_node_kwargs=None):
+    def __init__(self, G_list, G_nsample, use_bfs=True, pos_attr=None, max_n_nodes=None, max_prev_node=None, calc_max_prev_node_kwargs=None):
         """Constructor method.
         """
-        # # List of adjacency matrix (in csr format) of each graph 
+        # # List of adjacency matrix (in csr format) of each graph
         # self.G_adj_mat_list = [networkx.adjacency_matrix(G) for G in G_list]
 
-        # List of graphs 
+        # List of graphs
         self.G_list = G_list
 
         # List of number of nodes of each graph
@@ -568,6 +577,9 @@ class Graph_sequence_sampler_data_set(object):
 
         # Use BFS sequence
         self.use_bfs = use_bfs
+
+        # Node attribute name for spatial positions (enables spatially-ordered BFS)
+        self.pos_attr = pos_attr
 
         if max_n_nodes is None:
             self.max_n_nodes = max(self.G_n_nodes_list)
@@ -595,13 +607,18 @@ class Graph_sequence_sampler_data_set(object):
         
         # Compute adjacency matrix (starting by reordering nodes randomly)
         # - use only random generator from torch -> reproducibility is then
-        #   guaranteed by setting `torch.random.manual_seed()` 
+        #   guaranteed by setting `torch.random.manual_seed()`
         # seq = np.random.permutation(G.number_of_nodes()) # based on numpy
-        seq = torch.randperm(G.number_of_nodes()).numpy() 
+        seq = torch.randperm(G.number_of_nodes()).numpy()
         adj_mat_csr = networkx.adjacency_matrix(G, seq)
         if self.use_bfs:
-            G = networkx.from_scipy_sparse_array(adj_mat_csr)
-            seq = get_bfs_sequence(G, 0)
+            if self.pos_attr is not None:
+                node_positions = np.array(list(networkx.get_node_attributes(G, self.pos_attr).values()))[seq]
+                G = networkx.from_scipy_sparse_array(adj_mat_csr)
+                seq = get_spatial_bfs_sequence(G, node_positions)
+            else:
+                G = networkx.from_scipy_sparse_array(adj_mat_csr)
+                seq = get_bfs_sequence(G, 0)
             adj_mat_csr = networkx.adjacency_matrix(G, seq)
 
         # Encode adjacency matrix
@@ -875,8 +892,8 @@ def check_rnn_model_graph_gen(rnn_G, rnn_E, data_set=None):
 
 # ------------------------------------------------------------------------------
 def train_rnn_model_graph_gen(
-        rnn_G, 
-        rnn_E, 
+        rnn_G,
+        rnn_E,
         data_loader,
         optimizer_G,
         optimizer_E,
@@ -886,6 +903,8 @@ def train_rnn_model_graph_gen(
         return_loss=True,
         num_epochs=10,
         print_epoch=1,
+        patience=None,
+        min_delta=1e-5,
         device=torch.device('cpu')):
     """
     Trains a RNN model for graph generation.
@@ -993,17 +1012,25 @@ def train_rnn_model_graph_gen(
         number of epochs
     
     print_epoch : int, default: 10
-        result of every `print_epoch` epoch is displayed in stdout, if 
+        result of every `print_epoch` epoch is displayed in stdout, if
         `print_epoch > 0`
-    
+
+    patience : int, optional
+        number of epochs with no improvement after which training stops early;
+        by default (`None`): early stopping is disabled and training always
+        runs for `num_epochs` epochs
+
+    min_delta : float, default: 1e-5
+        minimum decrease in loss that counts as an improvement for patience
+
     device : torch device, default: torch.device('cpu')
         device on which the network is trained
-    
+
     Returns
     -------
     loss : list, optional
-        returned if `return_loss=True`, training loss of every epoch, 
-        list of floats of length `num_epochs`
+        returned if `return_loss=True`, training loss of every epoch,
+        list of floats of length `num_epochs` (or fewer if early stopping fires)
     
     lr_used_G : list, optional
         returned if `return_lr=True`, learning rate for rnn_G used at 
@@ -1038,7 +1065,12 @@ def train_rnn_model_graph_gen(
     if return_loss:
         loss_len = 0      # reset loss length
         loss_epoch = 0.0  # reset loss of one epoch
-    
+
+    # Early stopping state
+    if patience is not None:
+        best_loss = float('inf')
+        patience_counter = 0
+
     # Train the model
     for epoch in range(num_epochs):
         # rnn_G.train()
@@ -1217,6 +1249,17 @@ def train_rnn_model_graph_gen(
                 s = s + f', loss : {loss[-1]:.6f}'
             print(s)
 
+        # Early stopping
+        if patience is not None and return_loss:
+            if loss[-1] < best_loss - min_delta:
+                best_loss = loss[-1]
+                patience_counter = 0
+            else:
+                patience_counter += 1
+            if patience_counter >= patience:
+                print(f'Early stopping at epoch {epoch+1} (no improvement for {patience} epochs)')
+                break
+
     # Set model on cpu
     rnn_G.to(torch.device('cpu'))
     rnn_E.to(torch.device('cpu'))
@@ -1237,17 +1280,17 @@ def train_rnn_model_graph_gen(
 
 # ------------------------------------------------------------------------------
 def generate_graph(
-        rnn_G, 
+        rnn_G,
         rnn_E,
         max_n_nodes,
         n_graph=1,
         force_node1=True,
         return_encoded=False,
-        device=torch.device('cpu')):
+        device=None):
     """
     Generates one or several graph(s) using a RNN model for graph generation.
 
-    The model is constituted of two imbricated RNN models ((instances of) class 
+    The model is constituted of two imbricated RNN models ((instances of) class
     :class:`RNN_model`):
 
         - `rnn_G` : RNN model at graph level (global state of the graph): \
@@ -1337,17 +1380,17 @@ def generate_graph(
     
     return_encoded : bool, default: `False`
         if `True`: the encoded adjacency matrix is returned
-    
-    device : torch device, default: torch.device('cpu')
-        device on which the network is trained
-    
+
+    device : torch device, optional
+        by default (None): default_device() is used (MPS > CUDA > CPU)
+
     Returns
     -------
     G_list : list of networkx.Graph object of length `n_graph`
         generated graphs:
-        
+
         - G_list[k]: k-th graph
-    
+
     adj_seq_array_list : list of 2d numpy arrays of length `n_graph`, optional
         encoded adjacency matrices:
         
@@ -1362,6 +1405,9 @@ def generate_graph(
     one node, and the encoded adjacency matrix is empty (size=0)
     """
     fname = 'generate_graph'
+
+    if device is None:
+        device = default_device()
 
     # Copy models to device
     rnn_G.to(device)
@@ -1439,8 +1485,8 @@ def generate_graph(
             x_E = torch.lt(torch.rand(y_E_hat.size(), device=device), y_E_hat).to(torch.float)
 
             # Update x_G
-            x_G[:, 0, j] = x_E[:, 0, 0] 
-        
+            x_G[:, 0, j] = x_E[:, 0, 0]
+
         #print(x_G, torch.sum(x_G), torch.all(x_G[:, 0, :] == 0))
         if torch.all(x_G[:, 0, :] == 0):
             # EOS is obtained for all graphs
@@ -1485,14 +1531,14 @@ def generate_graph(
 
 # ------------------------------------------------------------------------------
 def generate_graph_min_n_nodes(
-        rnn_G, 
+        rnn_G,
         rnn_E,
         min_n_nodes,
         max_n_nodes,
         n_graph=1,
         force_node1=True,
         return_encoded=False,
-        device=torch.device('cpu')):
+        device=None):
     """
     Generates one or several graph(s) using a RNN model for graph generation.
 
@@ -1512,29 +1558,32 @@ def generate_graph_min_n_nodes(
     """
     fname = 'generate_graph_min_n_nodes'
 
+    if device is None:
+        device = default_device()
+
     if min_n_nodes > max_n_nodes:
         print('ERROR ({fname}): `min_n_nodes` less than `max_n_nodes`')
         return None
-    
+
     out = generate_graph(
-        rnn_G, 
+        rnn_G,
         rnn_E,
         max_n_nodes=max_n_nodes,
         n_graph=n_graph,
         force_node1=force_node1,
         return_encoded=return_encoded,
         device=device)
-    
+
     if return_encoded:
         G_list, adj_seq_array_list = out
     else:
         G_list = out
-    
+
     ind_too_small = [G.number_of_nodes() < min_n_nodes for G in G_list]
     while np.any(ind_too_small):
         m = np.sum(ind_too_small)
         out2 = generate_graph(
-            rnn_G, 
+            rnn_G,
             rnn_E,
             max_n_nodes=max_n_nodes,
             n_graph=m,
@@ -1875,11 +1924,7 @@ class Graph_sequence_sampler_data_set_with_node_features(object):
 
         if self.use_bfs:
             G = networkx.from_scipy_sparse_array(adj_mat_csr)
-            # # no need to attach node features...
-            # node_features_dict = {i: p for p in node_features_array}
-            # networkx.set_node_attributes(G, node_features_dict, self.attr)
-
-            seq = get_bfs_sequence(G, 0)
+            seq = get_spatial_bfs_sequence(G, node_features_array)
             adj_mat_csr = networkx.adjacency_matrix(G, seq)
             node_features_array = node_features_array[seq]
 
