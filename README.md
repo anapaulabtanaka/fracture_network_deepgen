@@ -6,7 +6,7 @@ Example of fracture networks generation using GraphRNN and DDPM.
 <br/>
 
 
-This repository is associated with accepted abstract and forthcoming paper:
+This repository is associated with presentation and submitted paper:
 
 **Fracture network modeling with graph deep learning**
 
@@ -16,10 +16,15 @@ This repository is associated with accepted abstract and forthcoming paper:
 
 ## Journal reference
 
-“Fracture network modeling with graph deep learning”. In: EGU General Assembly 2026, EGU26–11471.
+“Fracture network modeling with graph deep learning”. In: EGU General Assembly 2026, EGU26–11471. Solicited presentation.
 Tanaka, A. P. B., P. Renard, J. Straubhaar, X. X. Liang, and D. Lauzon (2026).
 
 https://doi.org/10.5194/egusphere-egu26-11471
+
+“Natural fracture network generation using graph deep learning”. Submitted.
+Tanaka, A. P. B., X. X. Liang, P. Renard, and J. Straubhaar (2026).
+
+
 
 ## Data description
 Reference fracture network interpretation data from: 
@@ -67,7 +72,7 @@ Mineral Mountains (USA): https://doi.org/10.15121/1405031
 Outcrop and syntehtic patterns: Generated based in https://doi.org/10.1002/2017WR020943
 
 
-Synthetic offshore (Brazil): Generated based in https://doi.org/10.1016/j.marpetgeo.2021.105392
+Reservoir Synthetic (Brazil): Generated based in https://doi.org/10.1016/j.marpetgeo.2021.105392
 
 
 Tsanfleuron (Switzerland): https://doi.org/10.5281/zenodo.15739431
@@ -112,7 +117,7 @@ For transformation of the fracture network interpretation in graphs, definition 
 `Set definition, length and azimuth calculation and storage` : set identification, length and azimuth calculation and storage as attributes.
 
 
-For the generation of fracture networks the examples are grouped in the folders "gen_{scenario_name}". The examples are from the karst_networks_gen repository (reference above).
+For the generation of fracture networks the examples are grouped in the folders "gen_{scenario_name}". The original examples are from the reference above.
 
 `00_graphData_collection.ipynb` : generate a collection of subgraphs (from the main graph) for data set and test set.
 
